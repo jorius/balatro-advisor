@@ -1,0 +1,26 @@
+# Optional Lovely patch: make Balatro flush queued saves on the next frame instead of every 5 seconds.
+#
+# Why: Balatro queues a save after every play/discard (save_run) but only writes the file when
+# G.F_SAVE_TIMER seconds have passed (5 on Windows/macOS), at round end, or on pause. That timer
+# is the delay the advisor page shows. Nothing outside the game can change it.
+#
+# Install (not done automatically, this touches the game folder):
+#   1. Download lovely-injector for Windows from https://github.com/ethangreen-dev/lovely-injector/releases
+#      and put version.dll next to Balatro.exe (C:\Program Files (x86)\Steam\steamapps\common\Balatro).
+#   2. Copy this repo's `mods\BalatroAdvisor` folder to `%APPDATA%\Balatro\Mods\BalatroAdvisor`.
+#   3. Start Balatro normally. Remove version.dll to go back to vanilla.
+#
+# The patch only inserts one assignment after each `self.F_SAVE_TIMER = 5` line in globals.lua.
+
+[manifest]
+version = "1.0.0"
+dump_lua = false
+priority = 0
+
+[[patches]]
+[patches.pattern]
+target = "globals.lua"
+pattern = "self.F_SAVE_TIMER = 5"
+position = "after"
+payload = "self.F_SAVE_TIMER = 0"
+match_indent = true
