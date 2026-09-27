@@ -16,11 +16,12 @@ async function loadPage() {
   const ctx = {
     document: { getElementById: el },
     EventSource: class { addEventListener() {} },
+    location: { reloads: 0, reload() { this.reloads++; } },
     setTimeout, performance, console,
   };
   vm.createContext(ctx);
   vm.runInContext(script + '\nglobalThis.__render = render;', ctx);
-  return { render: ctx.__render, els };
+  return { render: ctx.__render, els, location: ctx.location };
 }
 
 const ids = new Set(['status', 'error', 'levels', 'rec', 'alts', 'altsBody', 'deck', 'deckCount', 'deckBody', 'notes', 'notesBody']);
@@ -68,13 +69,14 @@ test('renders shop, pending, final and out-of-reach states without throwing', as
 });
 
 test('reloads the page when a different server id shows up', async () => {
-  const { render, els } = await loadPage();
+  const { render, els, location } = await loadPage();
   const shop = makeState({ phase: 'shop' });
   render(buildPayload(shop, null, { serverId: 'a' }));
   assert.match(els.rec.innerHTML, /In the shop/);
-  // no `location` in the test context: the reload branch must bail out instead of throwing,
-  // and it must not render the stale payload either
+  render(buildPayload(shop, null, { serverId: 'a' }));
+  assert.equal(location.reloads, 0);
   els.rec.innerHTML = '';
   render(buildPayload(shop, null, { serverId: 'b' }));
-  assert.equal(els.rec.innerHTML, '');
+  assert.equal(location.reloads, 1);
+  assert.equal(els.rec.innerHTML, ''); // nothing rendered from the payload that triggered the reload
 });
