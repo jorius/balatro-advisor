@@ -11,6 +11,17 @@
   header { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:baseline; padding:12px 16px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
   header .big { font-size:1.6rem; font-weight:700; }
   header .ok { color:var(--green); }
+  header .meta { margin-left:auto; color:var(--muted); font-size:.8rem; }
+  .note { margin-top:10px; padding:8px 12px; border-radius:8px; background:#2b2410; color:var(--amber); font-size:.95rem; }
+  .legend { color:var(--muted); font-size:.8rem; margin:-4px 0 10px; }
+
+  /* recommendation + deck side by side on wide screens */
+  .top { display:grid; grid-template-columns:1fr; gap:16px; margin-top:16px; align-items:start; }
+  .top section { margin-top:0; }
+  @media (min-width: 1200px) {
+    .top { grid-template-columns:minmax(0, 1fr) minmax(600px, 660px); }
+    .top:has(#deck[hidden]) { grid-template-columns:1fr; }
+  }
   .muted { color:var(--muted); }
   section { margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
   h2 { margin:0 0 10px; font-size:0.85rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
@@ -69,11 +80,12 @@
 <body>
 <header id="status"><span class="big">Balatro Advisor</span><span class="muted">connecting…</span></header>
 <div id="error" class="err" hidden></div>
-<section id="rec"><div class="idle">Waiting for Balatro…</div></section>
+<div class="top">
+  <section id="rec"><div class="idle">Waiting for Balatro…</div></section>
+  <section id="deck" hidden><h2>Remaining deck <span id="deckCount" class="muted"></span></h2><div id="deckBody"></div></section>
+</div>
 <section id="alts" hidden><h2>Alternatives</h2><div id="altsBody"></div></section>
-<section id="deck" hidden><h2>Remaining deck <span id="deckCount" class="muted"></span></h2><div id="deckBody"></div></section>
 <section id="notes" hidden><h2>Warnings &amp; jokers</h2><div id="notesBody"></div></section>
-<footer id="foot"></footer>
 <script>
 const RANKS = [14,13,12,11,10,9,8,7,6,5,4,3,2];
 const RANK_LABEL = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
@@ -92,10 +104,20 @@ function cardHtml(c, cls = '', badge = '') {
 }
 const cardsHtml = (cs, cls = '', tight = false) => `<div class="cards${tight ? ' tight' : ''}">${cs.map((c) => cardHtml(c, cls)).join('')}</div>`;
 
+function metaText(p) {
+  const a = p.advice;
+  const parts = [];
+  if (a && a.pending) parts.push('lookahead running');
+  else if (a && a.samples) parts.push(`${a.samples} samples per option · ${Math.round(a.elapsedMs)} ms`);
+  parts.push(`updated ${new Date(p.updatedAt).toLocaleTimeString()}`);
+  return parts.join(' · ');
+}
+
 function renderStatus(p) {
   const st = $('status');
+  const meta = `<span class="meta">${esc(metaText(p))}</span>`;
   if (p.phase === 'waiting') {
-    st.innerHTML = `<span class="big">Balatro Advisor</span><span class="muted">${esc(PHASE_TEXT.waiting)}</span>`;
+    st.innerHTML = `<span class="big">Balatro Advisor</span><span class="muted">${esc(PHASE_TEXT.waiting)}</span>${meta}`;
     return;
   }
   const cleared = p.chipsScored >= p.blind.target && p.blind.target > 0;
@@ -103,7 +125,13 @@ function renderStatus(p) {
     <span class="big">Ante ${p.ante} · Round ${p.round}</span>
     <span>${esc(p.blind.name || p.blindOnDeck || '')}</span>
     <span class="big ${cleared ? 'ok' : ''}">${num(p.chipsScored)} / ${num(p.blind.target)}</span>
-    <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span></span>`;
+    <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span></span>${meta}`;
+}
+
+/** True when no option reaches the target in any simulation (card-only scoring). */
+function outOfReach(a) {
+  if (!a || a.pending || a.clearsBlind || a.action === 'none') return false;
+  return a.pClear === 0 && (a.alternatives || []).every((o) => !o.pClear);
 }
 
 function renderRecommendation(p) {
@@ -125,9 +153,12 @@ function renderRecommendation(p) {
   let sub;
   if (a.clearsBlind) sub = `Clears the blind (${num(a.remaining)} needed).`;
   else if (a.pending) sub = `<span class="pending">Best play right now · checking discards…</span>`;
-  else if (a.action === 'play') sub = `Leaves ${num(Math.max(0, a.remaining - a.score))} to go · ${pct(a.pClear)} to clear this round`;
-  else sub = `${pct(a.pClear)} to clear this round · expected ${num(a.expChips)} chips`;
-  rec.innerHTML = `<div class="action">${headline}</div><div class="sub">${sub}</div>${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>
+  else if (a.action === 'play') sub = `Leaves ${num(Math.max(0, a.remaining - a.score))} to go · ${pct(a.pClear)} chance to clear the blind this round`;
+  else sub = `${pct(a.pClear)} chance to clear the blind this round · expected ${num(a.expChips)} chips at round end`;
+  const note = outOfReach(a)
+    ? `<div class="note">No simulated line reaches ${num(a.remaining)} more chips with card-only scoring, so options are ranked by expected chips instead. Jokers are not counted: if yours add mult or retriggers, your real odds are better than 0%.</div>`
+    : '';
+  rec.innerHTML = `<div class="action">${headline}</div><div class="sub">${sub}</div>${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>${note}
     <div class="muted" style="margin-top:10px">Your hand</div>${cardsHtml(p.hand, 'small')}`;
   rec.querySelectorAll('.card.small').forEach((el, i) => { if (pick.has(p.hand[i].id)) el.classList.add('hint'); });
 }
@@ -157,13 +188,17 @@ function renderAlternatives(p) {
   const list = p.phase === 'selecting' && a && a.action !== 'none' ? mergedAlternatives(a) : [];
   if (!list.length) { alts.hidden = true; return; }
   alts.hidden = false;
-  $('altsBody').innerHTML = list.map((o) => {
+  const legend = a.pending
+    ? 'Ranked by exact score while the lookahead runs.'
+    : '% = chance to clear the blind this round if you do this now (simulated from your remaining deck, jokers not counted) · exp. = expected chips at round end · scores = chips this play is worth right now.'
+      + (outOfReach(a) ? ' No option reaches the target in simulation, so rows are ranked by expected chips.' : '');
+  $('altsBody').innerHTML = `<div class="legend">${legend}</div>` + list.map((o) => {
     const kind = o.action === 'play'
       ? `<div class="kind play">PLAY<small>${esc(o.handType || '')}</small></div>`
       : `<div class="kind discard">DISCARD<small>${o.cards.length} card${o.cards.length > 1 ? 's' : ''}</small></div>`;
     const stats = o.pClear == null
-      ? `<div class="stats">${o.score != null ? `<b>${num(o.score)}</b><span>score</span>` : ''}</div>`
-      : `<div class="stats"><b>${pct(o.pClear)}</b><span>to clear · exp. ${num(o.expChips)}${o.score != null ? ` · scores ${num(o.score)}` : ''}</span></div>`;
+      ? `<div class="stats">${o.score != null ? `<b>${num(o.score)}</b><span>scores now</span>` : ''}</div>`
+      : `<div class="stats"><b>${pct(o.pClear)}</b><span>chance to clear · exp. ${num(o.expChips)}${o.score != null ? ` · scores ${num(o.score)}` : ''}</span></div>`;
     return `<div class="alt">${kind}${cardsHtml(o.cards, 'small', true)}${stats}</div>`;
   }).join('');
 }
@@ -202,9 +237,6 @@ function render(p) {
   renderAlternatives(p);
   renderDeck(p);
   renderNotes(p);
-  const a = p.advice;
-  const timing = a && a.samples ? `${a.samples} samples per option · ${Math.round(a.elapsedMs)} ms · ` : (a && a.pending ? 'lookahead running · ' : '');
-  $('foot').textContent = timing + `updated ${new Date(p.updatedAt).toLocaleTimeString()}`;
 }
 
 function connect() {

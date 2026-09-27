@@ -157,7 +157,8 @@ Single static file `public/index.html`, served at `http://127.0.0.1:8787` (use `
 1. **Status bar**: ante/round, blind name, `chipsScored / target`, hands and discards left. Green when the target is met.
 2. **Recommendation**: `PLAY` + cards + hand type + exact score + "clears the blind" / "leaves N to go", or `DISCARD` + cards + expected best score after redraw + clear probability. One-sentence reason. While the lookahead is pending it shows the best exact play with "checking discards…". The player's whole hand is shown below it with the recommended cards outlined.
 3. **Alternatives**: one merged list, up to 8 rows, each rendered as card chips: lookahead candidates first (with clear % and expected chips), then the remaining best-scoring plays (score only), de-duplicated by card set.
-4. **Deck panel**: one row per suit, 13 fixed slots rendered as mini cards; a slot the deck no longer holds is a dashed ghost, duplicates carry a `×n` badge. Suit totals on the left.
+4. **Deck panel**: one row per suit, 13 fixed slots rendered as mini cards; a slot the deck no longer holds is a dashed ghost, duplicates carry a `×n` badge. Suit totals on the left. On screens 1200 px and wider it sits in a right-hand column beside the recommendation; narrower screens stack it below. Alternatives always follow at full width.
+   The status bar also carries the timing line (samples per option, lookahead ms, last update time); when every option has 0% the recommendation shows a note that the target is out of reach for card-only scoring, jokers are not counted, and the ranking falls back to expected chips. The alternatives list has a one-line legend for %, exp. and scores.
 5. **Warnings**: unmodelled boss effect (with effect text), jokers held (names only), parse/read errors.
 6. **Idle states**: "In shop", "Choosing blind", "Round over", "Game over", "Waiting for Balatro save…" with the last recommendation greyed out.
 
