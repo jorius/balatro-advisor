@@ -120,7 +120,8 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(`Balatro Advisor  →  http://${args.host}:${addr.port}`);
   console.log(`watching ${savePath}`);
 
-  let lastPayload = { updatedAt: new Date().toISOString(), phase: 'waiting', savePath, warnings: [], advice: null, error: null };
+  const serverId = String(Date.now()); // the page reloads itself when this changes (new server = possibly new page)
+  let lastPayload = { updatedAt: new Date().toISOString(), phase: 'waiting', savePath, serverId, warnings: [], advice: null, error: null };
   server.broadcast(lastPayload);
   let latestSeq = 0;
   let prev = null;      // { state, scorer } of the last selecting-phase snapshot
@@ -145,7 +146,7 @@ export async function main(argv = process.argv.slice(2)) {
         }
       }
       if (state.phase !== 'selecting') {
-        lastPayload = buildPayload(state, null, { savePath, lastHand });
+        lastPayload = buildPayload(state, null, { savePath, lastHand, serverId });
         server.broadcast(lastPayload);
         console.log(`[${stamp()}] ${state.phase}`);
         return;
@@ -155,7 +156,7 @@ export async function main(argv = process.argv.slice(2)) {
       prev = { state, scorer: scoring ? scoring.scorer : ((rules) => (cards) => scorePlay(cards, state, rules))(blindRules(state)) };
       // Phase 1: instant exact ranking so the page updates the moment the save lands.
       const quick = advise(state, { lookahead: false, seed: snap.hash, ...scoreOpts });
-      lastPayload = buildPayload(state, quick, { savePath, lastHand });
+      lastPayload = buildPayload(state, quick, { savePath, lastHand, serverId });
       server.broadcast(lastPayload);
       console.log(`[${stamp()}] ${describe(quick)}`);
       // Let the SSE write flush before the CPU-heavy lookahead, and skip it if a newer save arrived.
@@ -163,7 +164,7 @@ export async function main(argv = process.argv.slice(2)) {
       if (seq !== latestSeq) return;
       const full = advise(state, { budgetMs: args.budgetMs, seed: snap.hash, ...scoreOpts });
       if (seq !== latestSeq) return;
-      lastPayload = buildPayload(state, full, { savePath, lastHand });
+      lastPayload = buildPayload(state, full, { savePath, lastHand, serverId });
       server.broadcast(lastPayload);
       console.log(`[${stamp()}] ${describe(full)}  (${full.samples} samples, ${Math.round(full.elapsedMs)} ms)`);
     } catch (e) {

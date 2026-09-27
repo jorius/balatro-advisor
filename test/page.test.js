@@ -66,3 +66,15 @@ test('renders shop, pending, final and out-of-reach states without throwing', as
   assert.match(els.rec.innerHTML, /Clears the blind/);
   assert.doesNotMatch(els.rec.innerHTML, /No simulated line/);
 });
+
+test('reloads the page when a different server id shows up', async () => {
+  const { render, els } = await loadPage();
+  const shop = makeState({ phase: 'shop' });
+  render(buildPayload(shop, null, { serverId: 'a' }));
+  assert.match(els.rec.innerHTML, /In the shop/);
+  // no `location` in the test context: the reload branch must bail out instead of throwing,
+  // and it must not render the stale payload either
+  els.rec.innerHTML = '';
+  render(buildPayload(shop, null, { serverId: 'b' }));
+  assert.equal(els.rec.innerHTML, '');
+});

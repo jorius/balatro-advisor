@@ -40,6 +40,7 @@
 
   /* hand levels strip */
   .levels { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .levels[hidden] { display:none; }
   .lvl { display:inline-flex; flex-direction:column; align-items:center; min-width:74px; padding:4px 8px; border-radius:8px; background:var(--panel); border:1px solid var(--line); color:var(--muted); font-size:.75rem; line-height:1.25; }
   .lvl b { font-size:.85rem; color:var(--text); }
   .lvl.up { border-color:var(--blue); background:#18283a; color:#bfe4ff; }
@@ -279,7 +280,14 @@ function renderNotes(p) {
   $('notesBody').innerHTML = notes.join('');
 }
 
+let knownServerId = null;
+
 function render(p) {
+  // A restarted server may serve a newer page: reload once so new sections and scripts appear.
+  if (p.serverId) {
+    if (knownServerId && p.serverId !== knownServerId && typeof location !== 'undefined') { location.reload(); return; }
+    knownServerId = p.serverId;
+  }
   renderStatus(p);
   $('error').hidden = !p.error;
   $('error').textContent = p.error ? `Save could not be read: ${p.error}` : '';
