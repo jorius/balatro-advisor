@@ -19,18 +19,47 @@ export function subsetsOf(items, minSize, maxSize) {
   return out;
 }
 
-/** Every legal play from the hand, best first (score desc, then fewer cards). */
-export function enumeratePlays(hand, state, rules) {
+/**
+ * Every legal play from the hand, best first (score desc, then fewer cards).
+ * `scorer(cards)` defaults to card-only scoring; pass a full scorer for joker-aware ranking.
+ */
+export function enumeratePlays(hand, state, rules, scorer = (cards) => scorePlay(cards, state, rules)) {
   const min = rules.playSizeExact ?? 1;
   const max = Math.min(rules.playSizeExact ?? 5, hand.length);
   if (min > hand.length) return [];
   const plays = [];
   for (const cards of subsetsOf(hand, min, max)) {
-    const r = scorePlay(cards, state, rules);
-    if (r.legal) plays.push({ cards, type: r.type, score: r.score, scoringCards: r.scoringCards, handChips: r.handChips, handMult: r.handMult });
+    const r = scorer(cards);
+    if (r.legal) {
+      plays.push({
+        cards, type: r.type, score: r.score, scoringCards: r.scoringCards,
+        handChips: r.handChips, handMult: r.handMult, chips: r.chips, mult: r.mult, min: r.min, max: r.max,
+      });
+    }
   }
   plays.sort((a, b) => b.score - a.score || a.cards.length - b.cards.length);
   return plays;
+}
+
+/**
+ * Lookahead scorer: card-only scoring scaled by how much the full scorer exceeded it at the root,
+ * per hand type (falls back to the best play's ratio). Exact full scoring is far too slow for rollouts.
+ */
+function calibratedScorer(state, rules, rootPlays) {
+  const ratioByType = {};
+  let fallback = 1;
+  for (const p of rootPlays) {
+    const quick = scorePlay(p.cards, state, rules);
+    if (!quick.legal || quick.score <= 0) continue;
+    const ratio = p.score / quick.score;
+    if (ratioByType[p.type] === undefined) ratioByType[p.type] = ratio;
+    if (p === rootPlays[0]) fallback = ratio;
+  }
+  return (cards) => {
+    const r = scorePlay(cards, state, rules);
+    if (!r.legal) return r;
+    return { ...r, score: r.score * (ratioByType[r.type] ?? fallback) };
+  };
 }
 
 const byChipsAsc = (a, b) => a.chips - b.chips || a.rank - b.rank;
@@ -102,7 +131,7 @@ function simulate(root, action, rng) {
   if (action.action === 'play') play(action.play); else discard(action.cards);
 
   while (chips < root.target && handsLeft > 0) {
-    const plays = enumeratePlays(hand, root.state, rules);
+    const plays = enumeratePlays(hand, root.state, rules, root.rolloutScorer);
     if (plays.length === 0) break;
     const best = plays[0];
     if (chips + best.score >= root.target || discardsLeft <= 0) { play(best); continue; }
@@ -115,12 +144,13 @@ function simulate(root, action, rng) {
 }
 
 const pct = (x) => `${Math.round(x * 100)}%`;
-const summarizePlay = (p) => ({ cards: p.cards, handType: p.type, score: p.score });
-const stripOption = (o) => ({ action: o.action, cards: o.cards, handType: o.handType, score: o.score, pClear: o.pClear, expChips: o.expChips, samples: o.samples });
+const summarizePlay = (p) => ({ cards: p.cards, handType: p.type, score: p.score, chips: p.chips, mult: p.mult, min: p.min, max: p.max });
+const stripOption = (o) => ({ action: o.action, cards: o.cards, handType: o.handType, score: o.score, chips: o.chips, mult: o.mult, min: o.min, max: o.max, pClear: o.pClear, expChips: o.expChips, samples: o.samples });
 
 /**
  * Recommend a play or discard for a GameState in the 'selecting' phase.
- * opts: { budgetMs=500, seed='', minSamples=32, maxSamples=512 }
+ * opts: { budgetMs=500, seed='', minSamples=32, maxSamples=512, lookahead=true,
+ *         scorer: (cards) => PlayResult  (full scorer; card-only when omitted), scorerWarnings: string[] }
  */
 export function advise(state, opts = {}) {
   const t0 = performance.now();
@@ -133,14 +163,15 @@ export function advise(state, opts = {}) {
   const base = {
     action: 'none', cards: [], handType: undefined, score: undefined, clearsBlind: false, remaining,
     pClear: 0, expChips: state.chipsScored, reason: '', alternatives: [], topPlays: [],
-    warnings: [...rules.warnings], samples: 0, elapsedMs: 0, seed, pending: false,
+    warnings: [...rules.warnings, ...(opts.scorerWarnings ?? [])], samples: 0, elapsedMs: 0, seed, pending: false,
+    scoreMode: opts.scorer ? 'full' : 'cards',
   };
   const done = (fields) => ({ ...base, ...fields, elapsedMs: performance.now() - t0 });
 
   if (state.phase !== 'selecting') return done({ reason: 'Not choosing cards right now.' });
   if (state.handsLeft <= 0) return done({ reason: 'No hands left this round.' });
 
-  const plays = enumeratePlays(state.hand, state, rules);
+  const plays = enumeratePlays(state.hand, state, rules, opts.scorer);
   const topPlays = plays.slice(0, 8).map(summarizePlay);
   if (plays.length === 0) {
     return done({ topPlays, warnings: [...base.warnings, 'No legal play with the current hand.'], reason: 'No legal play.' });
@@ -171,7 +202,10 @@ export function advise(state, opts = {}) {
   if (state.discardsLeft > 0) {
     for (const cards of candidateDiscards(state.hand, plays)) candidates.push({ action: 'discard', cards });
   }
-  const root = { state, rules, handSize: Math.max(state.handSize, state.hand.length), target: state.target };
+  const root = {
+    state, rules, handSize: Math.max(state.handSize, state.hand.length), target: state.target,
+    rolloutScorer: opts.scorer ? calibratedScorer(state, rules, plays) : undefined,
+  };
   const rng = createRng(seed);
   const stats = candidates.map(() => ({ n: 0, cleared: 0, chips: 0 }));
   let samplesPer = 0;

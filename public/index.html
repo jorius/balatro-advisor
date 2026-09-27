@@ -146,11 +146,23 @@ function renderStatus(p) {
     return;
   }
   const cleared = p.chipsScored >= p.blind.target && p.blind.target > 0;
+  const mode = p.scoreMode === 'full' ? '<span class="tag" title="Jokers, enhancements, editions and seals are scored">full scoring</span>' : '<span class="tag" title="Only ranks, suits and hand levels are scored">cards only</span>';
+  const lh = p.lastHand
+    ? `<span class="${p.lastHand.ok ? 'ok' : 'warn'}" title="${esc(p.lastHand.cards.map((c) => c.label).join(' '))}">${p.lastHand.ok ? '✓' : '⚠'} last hand ${esc(p.lastHand.handType)}: predicted ${num(p.lastHand.predicted)} · actual ${num(p.lastHand.actual)}</span>`
+    : '';
   st.innerHTML = `
     <span class="big">Ante ${p.ante} · Round ${p.round}</span>
     <span>${esc(p.blind.name || p.blindOnDeck || '')}</span>
     <span class="big ${cleared ? 'ok' : ''}">${num(p.chipsScored)} / ${num(p.blind.target)}</span>
-    <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span></span>${meta}`;
+    <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span><span class="tag">$${num(p.money || 0)}</span>${mode}</span>${lh}${meta}`;
+}
+
+/** "80 × 19.75" plus a luck range when the no-luck and all-luck results differ. */
+function breakdown(o) {
+  if (o.chips == null || o.mult == null) return '';
+  let s = `${num(o.chips)} chips × ${num(o.mult * 100) / 100} mult`;
+  if (o.min != null && o.max != null && Math.round(o.min) !== Math.round(o.max)) s += ` · ${num(o.min)} – ${num(o.max)} depending on luck`;
+  return s;
 }
 
 /** True when no option reaches the target in any simulation (card-only scoring). */
@@ -181,9 +193,12 @@ function renderRecommendation(p) {
   else if (a.action === 'play') sub = `Leaves ${num(Math.max(0, a.remaining - a.score))} to go · ${pct(a.pClear)} chance to clear the blind this round`;
   else sub = `${pct(a.pClear)} chance to clear the blind this round · expected ${num(a.expChips)} chips at round end`;
   const note = outOfReach(a)
-    ? `<div class="note">No simulated line reaches ${num(a.remaining)} more chips with card-only scoring, so options are ranked by expected chips instead. Jokers are not counted: if yours add mult or retriggers, your real odds are better than 0%.</div>`
+    ? (p.scoreMode === 'full'
+      ? `<div class="note">No simulated line reaches ${num(a.remaining)} more chips, so options are ranked by expected chips instead. Scores include your jokers; the lookahead estimates future hands from the current joker boost, so it can be off for jokers that only fire on specific cards.</div>`
+      : `<div class="note">No simulated line reaches ${num(a.remaining)} more chips with card-only scoring, so options are ranked by expected chips instead. Jokers are not counted: if yours add mult or retriggers, your real odds are better than 0%.</div>`)
     : '';
-  rec.innerHTML = `<div class="action">${headline}</div><div class="sub">${sub}</div>${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>${note}
+  const bd = a.action === 'play' ? breakdown(a) : '';
+  rec.innerHTML = `<div class="action">${headline}</div><div class="sub">${sub}</div>${bd ? `<div class="muted">${esc(bd)}</div>` : ''}${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>${note}
     <div class="muted" style="margin-top:10px">Your hand</div>${cardsHtml(p.hand, 'small')}`;
   rec.querySelectorAll('.card.small').forEach((el, i) => { if (pick.has(p.hand[i].id)) el.classList.add('hint'); });
 }
@@ -215,15 +230,18 @@ function renderAlternatives(p) {
   alts.hidden = false;
   const legend = a.pending
     ? 'Ranked by exact score while the lookahead runs.'
-    : '% = chance to clear the blind this round if you do this now (simulated from your remaining deck, jokers not counted) · exp. = expected chips at round end · scores = chips this play is worth right now.'
+    : (p.scoreMode === 'full'
+      ? '% = chance to clear the blind this round if you do this now (simulated from your remaining deck; future hands use the current joker boost as an estimate) · exp. = expected chips at round end · scores = exact chips this play is worth right now, jokers included.'
+      : '% = chance to clear the blind this round if you do this now (simulated from your remaining deck, jokers not counted) · exp. = expected chips at round end · scores = chips this play is worth right now.')
       + (outOfReach(a) ? ' No option reaches the target in simulation, so rows are ranked by expected chips.' : '');
   $('altsBody').innerHTML = `<div class="legend">${legend}</div>` + list.map((o) => {
     const kind = o.action === 'play'
       ? `<div class="kind play">PLAY<small>${esc(o.handType || '')}</small></div>`
       : `<div class="kind discard">DISCARD<small>${o.cards.length} card${o.cards.length > 1 ? 's' : ''}</small></div>`;
+    const bd = breakdown(o);
     const stats = o.pClear == null
-      ? `<div class="stats">${o.score != null ? `<b>${num(o.score)}</b><span>scores now</span>` : ''}</div>`
-      : `<div class="stats"><b>${pct(o.pClear)}</b><span>chance to clear · exp. ${num(o.expChips)}${o.score != null ? ` · scores ${num(o.score)}` : ''}</span></div>`;
+      ? `<div class="stats" title="${esc(bd)}">${o.score != null ? `<b>${num(o.score)}</b><span>scores now${bd ? ` · ${esc(bd)}` : ''}</span>` : ''}</div>`
+      : `<div class="stats" title="${esc(bd)}"><b>${pct(o.pClear)}</b><span>chance to clear · exp. ${num(o.expChips)}${o.score != null ? ` · scores ${num(o.score)}` : ''}</span></div>`;
     return `<div class="alt">${kind}${cardsHtml(o.cards, 'small', true)}${stats}</div>`;
   }).join('');
 }
@@ -253,7 +271,10 @@ function renderDeck(p) {
 function renderNotes(p) {
   const notes = [];
   for (const w of p.warnings || []) notes.push(`<div class="warn">⚠ ${esc(w)}</div>`);
-  if (p.jokers && p.jokers.length) notes.push(`<div class="muted">Jokers (not scored): ${p.jokers.map((j) => esc(j.name || j.key)).join(', ')}</div>`);
+  if (p.jokers && p.jokers.length) {
+    const label = p.scoreMode === 'full' ? 'Jokers (scored unless warned above)' : 'Jokers (not scored)';
+    notes.push(`<div class="muted">${label}: ${p.jokers.map((j) => esc(j.name || j.key) + (j.edition ? ` [${esc(j.edition)}]` : '') + (j.debuffed ? ' (debuffed)' : '')).join(', ')}</div>`);
+  }
   $('notes').hidden = notes.length === 0;
   $('notesBody').innerHTML = notes.join('');
 }

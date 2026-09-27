@@ -8,7 +8,11 @@ Watches `%APPDATA%\Balatro\<profile>\save.jkr`, scores every play with Balatro's
     npm start -- --save path\to\save.jkr
     npm test
 
-Scores card ranks, suits, hand types and Planet levels only. Jokers (except Four Fingers / Shortcut hand-detection rules), seals, editions and enhancements are not scored.
+Scoring includes jokers (with their live counters from the save), card enhancements, editions, seals, Planet levels and boss blind rules, via the vendored [Balatrolator](https://github.com/kleinfreund/balatrolator) engine (MIT, `vendor/balatrolator`). The exact score of every play is shown; the clear-probability lookahead estimates future hands from the current joker boost. Jokers the scorer cannot model (Driver's License, Space Joker, unknown mod jokers) are listed as warnings. After every real hand the status bar compares the predicted score with the chips the game actually added, so you can see whether the engine is trustworthy for your current jokers.
+
+    npm start -- --card-only       # ranks, suits and hand levels only, no jokers
+
+To refresh the joker name table after a game update: `node scripts/gen-joker-names.js <path to game.lua>` (extract `game.lua` from `Balatro.exe` with `unzip`).
 
 ## About the delay
 

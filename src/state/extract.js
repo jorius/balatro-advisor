@@ -32,8 +32,16 @@ export function extractState(raw) {
   const jokers = toList(areas.jokers?.cards).map((j) => {
     const key = str(j?.save_fields?.center);
     const label = str(j?.label);
-    return { key, name: label && label !== 'Base Card' ? label : key };
+    const ability = j?.ability && typeof j.ability === 'object' ? j.ability : {};
+    return {
+      key, name: label && label !== 'Base Card' ? label : (str(ability.name) || key),
+      edition: str(j?.edition?.type) || null, ability, debuffed: j?.debuff === true, sellCost: num(j?.sell_cost, 0),
+    };
   });
+  const consumables = toList(areas.consumeables?.cards).map((c) => str(c?.save_fields?.center)).filter(Boolean);
+  const vouchers = game.used_vouchers && typeof game.used_vouchers === 'object' && !Array.isArray(game.used_vouchers)
+    ? Object.keys(game.used_vouchers).filter((k) => game.used_vouchers[k])
+    : [];
 
   const handLevels = {};
   for (const [name, h] of Object.entries(game.hands ?? {})) {
@@ -41,9 +49,15 @@ export function extractState(raw) {
     handLevels[name] = {
       level: num(h.level, 1), chips: num(h.chips, 0), mult: num(h.mult, 1),
       sChips: num(h.s_chips, 0), sMult: num(h.s_mult, 1), lChips: num(h.l_chips, 0), lMult: num(h.l_mult, 0),
-      playedThisRound: num(h.played_this_round, 0),
+      playedThisRound: num(h.played_this_round, 0), played: num(h.played, 0),
     };
   }
+
+  const play = cardsOf('play');
+  const allCards = [...hand, ...deck, ...discard, ...play];
+  const enhancementCounts = {};
+  for (const c of allCards) if (c.enhancement !== 'None') enhancementCounts[c.enhancement] = (enhancementCounts[c.enhancement] ?? 0) + 1;
+  const chosenCard = (v) => (v && typeof v === 'object' ? { rank: num(v.id, 0), suit: str(v.suit) || null } : null);
 
   const stateCode = num(raw.STATE, 0);
   const usedHands = blind.hands && typeof blind.hands === 'object' && !Array.isArray(blind.hands) ? Object.keys(blind.hands) : [];
@@ -73,5 +87,18 @@ export function extractState(raw) {
       fourFingers: jokers.some((j) => j.key === 'j_four_fingers'),
       shortcut: jokers.some((j) => j.key === 'j_shortcut'),
     },
+    // Full-scoring inputs
+    money: num(game.dollars, 0),
+    deckName: str(raw.BACK?.name) || 'Red Deck',
+    jokerSlots: num(areas.jokers?.config?.card_limit, 5),
+    consumables,
+    vouchers,
+    startingDeckSize: num(game.starting_deck_size, 52),
+    tarotUsed: num(game.consumeable_usage_total?.tarot, 0),
+    fullDeckCount: allCards.length,
+    enhancementCounts,
+    chosen: { idol: chosenCard(round.idol_card), ancient: chosenCard(round.ancient_card) },
+    handsPlayed: num(round.hands_played, 0),
+    discardsUsed: num(round.discards_used, 0),
   };
 }

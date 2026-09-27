@@ -182,6 +182,20 @@ Endpoints: `/` page, `/events` SSE stream (`state` and `error` events), `/state.
 - **Advisor:** immediate-win path; discard preferred when a 4-flush has one draw; determinism with fixed seed; timing test that an 8-card hand with 4 discards and 3 hands completes under the 500 ms budget.
 - **Server:** SSE broadcast delivers the latest payload to a connected client.
 
+## 10. Full scoring: jokers, enhancements, editions, seals (added 2026-09-27)
+
+**Decision:** reuse [Balatrolator](https://github.com/kleinfreund/balatrolator) (MIT, TypeScript, versioned to game build 1.0.1o) as the score oracle instead of porting the game's 1,655 lines of joker logic. Its `src/lib` is vendored verbatim under `vendor/balatrolator/` (only `#lib/` imports rewritten; `UPSTREAM.txt` records the commit) and run through Node's native type stripping. One runtime dependency, `decimal.js`, comes with it. It scores one given play (played cards + held cards + jokers + levels + blind); we keep our enumeration, boss legality rules, lookahead and page.
+
+**Extractor additions** (`GameState`): `money`, `deckName`, `jokerSlots`, enriched `jokers[]` (`key`, `name`, `edition`, raw `ability`, `debuffed`, `sellCost`), `consumables[]` (center keys), `vouchers[]`, `startingDeckSize`, `tarotUsed`, `fullDeckCount`, `enhancementCounts`, `chosen.idol`/`chosen.ancient` (from `current_round`), `handLevels[].played`, `handsPlayed`, `discardsUsed`. Cards carry `enhancement`, `edition`, `seal`, `stone`.
+
+**Adapter** (`src/engine/full-score.js`, `src/engine/joker-map.js`): `buildScoreContext(state, rules)` maps jokers once per state; `createFullScorer(state, rules, ctx)(cards)` returns `{ legal, type, scoringCards, score, min, max, chips, mult, log }` where `score` is Balatrolator's average-luck result and `min`/`max` the no-luck/all-luck results. Joker live values are read from the fields the game itself mutates: `ability.x_mult` (Hologram, Lucky Cat, Ramen, Vampire, Obelisk, Constellation, Madness, Hit the Road, Campfire, Throwback, Glass Joker, Yorick), `ability.caino_xmult` (Canio), `ability.mult` (Ride the Bus, Green Joker, Flash Card, Popcorn, Red Card, Ceremonial Dagger, Spare Trousers, Swashbuckler), `ability.extra.chips` (Castle, Runner, Ice Cream, Wee Joker, Square Joker), computed like the game for Blue Joker (2 × deck size), Erosion (4 × cards lost from the starting deck), Fortune Teller (tarots used), Steel Joker and Stone Joker (tallies), Loyalty Card (`loyalty_remaining == 0`), Card Sharp (hand type already played this round, set per play), The Idol and Ancient Joker (chosen card from `current_round`). Our rules still decide legality (Psychic, Eye, Mouth) and The Arm's level drop; suit/face debuffs are passed as `debuffed`. Unknown keys, debuffed jokers, Driver's License and Space Joker produce warnings and are skipped.
+
+**Advisor:** `advise(state, { scorer })` ranks the root plays with the full scorer (≈0.2 ms per play, ≈45 ms for 218). Rollouts cannot afford it, so the lookahead uses card-only scoring scaled per hand type by the ratio full/card-only observed at the root (fallback: the best play's ratio). Exact scores are shown; clear probability is an estimate and the page says so. `--card-only` restores the old engine.
+
+**Predicted vs actual:** the CLI keeps the previous selecting-phase state and scorer. When the next snapshot is the same round with `hands_played + 1`, the cards that left the hand are re-scored and compared with the chips the game added; the result (`lastHand`: cards, type, predicted, min, max, actual, ok within 0.5 % or inside the luck range) is shown in the status bar with ✓/⚠ and logged.
+
+**Page:** status bar shows the scoring mode, money and the last-hand check; the recommendation shows chips × mult and a luck range when it differs; jokers are listed as scored, with editions and debuffs.
+
 ## 9. Out of scope (first version)
 
 - Scoring any joker other than the Four Fingers / Shortcut detection rules; seals, editions, enhancements (a Stone card is treated by its underlying base rank, a known inaccuracy); consumables; money; shop decisions.

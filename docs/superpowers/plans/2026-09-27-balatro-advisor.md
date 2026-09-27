@@ -2247,6 +2247,10 @@ git commit -m "feat: live advisor page"
 
 ---
 
+### Phase 2 (done 2026-09-27): full scoring via Balatrolator — see spec §10
+
+Implemented in this order, each with tests: card modifiers + stone cards in the model; extractor full-scoring fields; `vendor/balatrolator` + `scripts/gen-joker-names.js`; `src/engine/joker-map.js`; `src/engine/full-score.js`; scorer injection and root-calibrated rollouts in the advisor; `makeScorer`/`reconcileLastHand` in the CLI; page (scoring mode, chips × mult, luck range, last-hand check). Validation: Balatrolator reference case 010 reproduced through our model (2,856), plus per-family live-value tests.
+
 ### Task 13: End-to-end check, spec sync, final test run
 
 **Files:**

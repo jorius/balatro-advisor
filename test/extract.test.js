@@ -61,8 +61,47 @@ test('extracts a synthetic selecting-hand save', () => {
   assert.deepEqual(s.blind, { key: 'bl_eye', name: 'The Eye', disabled: false, usedHandTypes: ['Pair'], lockedHandType: null });
   assert.equal(s.handLevels.Pair.level, 2);
   assert.equal(s.handLevels.Pair.playedThisRound, 1);
-  assert.deepEqual(s.jokers, [{ key: 'j_four_fingers', name: 'Four Fingers' }]);
+  assert.deepEqual(s.jokers.map(({ key, name }) => ({ key, name })), [{ key: 'j_four_fingers', name: 'Four Fingers' }]);
   assert.deepEqual(s.flags, { fourFingers: true, shortcut: false });
+  assert.equal(s.money, 0);
+  assert.equal(s.deckName, 'Red Deck');
+  assert.equal(s.fullDeckCount, 5);
+  assert.equal(s.handsPlayed, 0);
+});
+
+test('extracts full-scoring inputs: money, deck, vouchers, consumables, chosen cards, enhancement counts', () => {
+  const raw = {
+    STATE: 1, BACK: { name: 'Blue Deck' },
+    BLIND: { name: 'Small Blind', config_blind: 'bl_small', chips: 300 },
+    cardAreas: {
+      hand: { cards: [rawCard(1, 9, 'Spades', { ability: { effect: 'Steel Card' } })], config: { card_limit: 8 } },
+      deck: { cards: [rawCard(2, 2, 'Diamonds', { ability: { effect: 'Stone Card', bonus: 50 } }), rawCard(3, 3, 'Diamonds')] },
+      discard: { cards: [rawCard(4, 4, 'Clubs', { ability: { effect: 'Steel Card' } })] },
+      jokers: { cards: [{ save_fields: { center: 'j_hologram' }, label: 'Hologram', edition: { type: 'foil' }, ability: { x_mult: 1.75, extra: 0.25 }, sell_cost: 4 }], config: { card_limit: 6 } },
+      consumeables: { cards: [{ save_fields: { center: 'c_pluto' } }] },
+    },
+    GAME: {
+      chips: 0, round: 1, dollars: 23, starting_deck_size: 52, used_vouchers: { v_observatory: true, v_grabber: false },
+      consumeable_usage_total: { tarot: 3 }, round_resets: { ante: 1 },
+      current_round: { hands_left: 4, discards_left: 3, hands_played: 1, discards_used: 2, idol_card: { suit: 'Hearts', rank: 'Queen', id: 12 }, ancient_card: { suit: 'Clubs' } },
+      hands: { Pair: { level: 1, chips: 10, mult: 2, s_chips: 10, s_mult: 2, l_chips: 15, l_mult: 1, played_this_round: 0, played: 7 } },
+    },
+  };
+  const s = extractState(raw);
+  assert.equal(s.money, 23);
+  assert.equal(s.deckName, 'Blue Deck');
+  assert.equal(s.jokerSlots, 6);
+  assert.deepEqual(s.vouchers, ['v_observatory']);
+  assert.deepEqual(s.consumables, ['c_pluto']);
+  assert.equal(s.startingDeckSize, 52);
+  assert.equal(s.tarotUsed, 3);
+  assert.equal(s.fullDeckCount, 4);
+  assert.deepEqual(s.enhancementCounts, { Steel: 2, Stone: 1 });
+  assert.deepEqual(s.chosen, { idol: { rank: 12, suit: 'Hearts' }, ancient: { rank: 0, suit: 'Clubs' } });
+  assert.equal(s.handsPlayed, 1);
+  assert.equal(s.discardsUsed, 2);
+  assert.equal(s.handLevels.Pair.played, 7);
+  assert.deepEqual(s.jokers[0], { key: 'j_hologram', name: 'Hologram', edition: 'foil', ability: { x_mult: 1.75, extra: 0.25 }, debuffed: false, sellCost: 4 });
 });
 
 test('tolerates missing sections and empty tables parsed as arrays', () => {

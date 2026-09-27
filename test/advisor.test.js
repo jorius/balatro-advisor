@@ -105,6 +105,23 @@ test('lookahead:false returns the exact ranking instantly and marks the advice p
   assert.equal(win.clearsBlind, true);
 });
 
+test('an injected scorer drives the ranking and calibrates the lookahead', async () => {
+  const { scorePlay } = await import('../src/engine/hands.js');
+  const hand = cards('H_2 H_7 H_9 H_J S_4 C_3 D_6 S_8');
+  const deck = cards('H_3 S_5 C_6 D_7 H_8 S_T H_Q C_K D_A S_2 C_4 D_9');
+  const state = makeState({ hand, deck, target: 2000, handsLeft: 2, discardsLeft: 1 });
+  const rules = blindRules(state);
+  const scorer = (cs) => { const r = scorePlay(cs, state, rules); return r.legal ? { ...r, score: r.score * 10, chips: 1, mult: 1 } : r; };
+  const quick = advise(state, { lookahead: false, scorer, scorerWarnings: ['w1'] });
+  assert.equal(quick.scoreMode, 'full');
+  assert.ok(quick.warnings.includes('w1'));
+  assert.equal(quick.score, scorePlay(quick.cards, state, rules).score * 10);
+  const full = advise(state, { scorer, seed: 'c', minSamples: 8, maxSamples: 8 });
+  assert.ok(full.action === 'play' || full.action === 'discard');
+  // expected chips reflect the ×10 calibration: a plain High Card/Pair line could never reach hundreds
+  assert.ok(full.expChips > 200, `expChips ${full.expChips}`);
+});
+
 test('non-selecting phase or no hands left yields no action', () => {
   assert.equal(advise(makeState({ phase: 'shop' })).action, 'none');
   assert.equal(advise(makeState({ hand: cards('S_2'), handsLeft: 0 })).action, 'none');
