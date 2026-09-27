@@ -23,15 +23,23 @@ export function parseArgs(argv) {
 }
 
 export function serializeCard(c) {
-  return { id: c.id, label: c.label, rank: c.rank, suit: c.suit, chips: c.chips, debuffed: c.debuffed };
+  return {
+    id: c.id, label: c.label, rank: c.rank, suit: c.suit, chips: c.chips, debuffed: c.debuffed,
+    enhancement: c.enhancement ?? 'None', edition: c.edition ?? 'Base', seal: c.seal ?? 'None', stone: c.stone === true,
+  };
 }
+
+const countStones = (cards) => cards.reduce((n, c) => n + (c.stone ? 1 : 0), 0);
 
 export function buildPayload(state, advice, extra = {}) {
   const deckCounts = {};
   for (const c of state.deck) {
+    if (c.stone) continue;
     const k = `${c.suit}:${c.rank}`;
     deckCounts[k] = (deckCounts[k] || 0) + 1;
   }
+  const handLevels = Object.fromEntries(Object.entries(state.handLevels ?? {}).map(([name, h]) => [name, { level: h.level, chips: h.chips, mult: h.mult }]));
+  const stones = { hand: countStones(state.hand), deck: countStones(state.deck) };
   const opt = (o) => ({ action: o.action, cards: o.cards.map(serializeCard), handType: o.handType, score: o.score, pClear: o.pClear, expChips: o.expChips, samples: o.samples });
   return {
     updatedAt: new Date().toISOString(),
@@ -40,7 +48,7 @@ export function buildPayload(state, advice, extra = {}) {
     blind: { name: state.blind.name, key: state.blind.key, target: state.target },
     chipsScored: state.chipsScored, handsLeft: state.handsLeft, discardsLeft: state.discardsLeft,
     hand: state.hand.map(serializeCard),
-    deckCount: state.deck.length, deckCounts,
+    deckCount: state.deck.length, deckCounts, stones, handLevels,
     jokers: state.jokers,
     warnings: advice?.warnings ?? [],
     advice: advice ? {

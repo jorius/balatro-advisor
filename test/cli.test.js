@@ -17,8 +17,10 @@ test('buildPayload serialises state and advice for the page', () => {
   assert.equal(p.phase, 'selecting');
   assert.equal(p.blind.target, 50);
   assert.equal(p.hand.length, 3);
-  assert.deepEqual(Object.keys(p.hand[0]).sort(), ['chips', 'debuffed', 'id', 'label', 'rank', 'suit']);
+  assert.deepEqual(Object.keys(p.hand[0]).sort(), ['chips', 'debuffed', 'edition', 'enhancement', 'id', 'label', 'rank', 'seal', 'stone', 'suit']);
   assert.equal(p.deckCount, 3);
+  assert.deepEqual(p.stones, { hand: 0, deck: 0 });
+  assert.equal(p.handLevels['Pair'].chips, 10);
   assert.equal(p.deckCounts['Spades:2'], 2);
   assert.equal(p.advice.action, 'play');
   assert.equal(p.advice.cards.length, 2);

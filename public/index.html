@@ -36,6 +36,15 @@
   .card.mini { min-width:34px; height:44px; font-size:1rem; padding:0 4px; border-radius:6px; box-shadow:0 1px 0 #b9b2a3; }
   .card.hint { outline:3px solid var(--blue); }
   .card.gone { background:transparent; color:var(--line); box-shadow:none; border:1px dashed var(--line); }
+  .card.stone { background:#8d8d94; color:#2a2a30; box-shadow:0 2px 0 #5c5c63; letter-spacing:.05em; }
+
+  /* hand levels strip */
+  .levels { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .lvl { display:inline-flex; flex-direction:column; align-items:center; min-width:74px; padding:4px 8px; border-radius:8px; background:var(--panel); border:1px solid var(--line); color:var(--muted); font-size:.75rem; line-height:1.25; }
+  .lvl b { font-size:.85rem; color:var(--text); }
+  .lvl.up { border-color:var(--blue); background:#18283a; color:#bfe4ff; }
+  .lvl.up b { color:var(--blue); }
+  .lvl .n { font-variant-numeric:tabular-nums; }
   .card .x { position:absolute; top:-6px; right:-6px; font-size:.65rem; font-weight:700; background:var(--amber); color:#1a1a1a; border-radius:999px; padding:1px 5px; }
 
   /* recommendation */
@@ -80,6 +89,7 @@
 <body>
 <header id="status"><span class="big">Balatro Advisor</span><span class="muted">connecting…</span></header>
 <div id="error" class="err" hidden></div>
+<div id="levels" class="levels" hidden></div>
 <div class="top">
   <section id="rec"><div class="idle">Waiting for Balatro…</div></section>
   <section id="deck" hidden><h2>Remaining deck <span id="deckCount" class="muted"></span></h2><div id="deckBody"></div></section>
@@ -99,8 +109,23 @@ const PHASE_TEXT = { waiting:'Waiting for Balatro save…', shop:'In the shop', 
 const keyOf = (cards) => cards.map((c) => c.id).sort().join(',');
 
 function cardHtml(c, cls = '', badge = '') {
-  const classes = ['card', RED.has(c.suit) ? 'red' : '', c.debuffed ? 'debuffed' : '', cls].filter(Boolean).join(' ');
-  return `<span class="${classes}" title="${c.chips} chips">${esc(c.label)}${badge ? `<span class="x">${badge}</span>` : ''}</span>`;
+  const classes = ['card', c.stone ? 'stone' : (RED.has(c.suit) ? 'red' : ''), c.debuffed ? 'debuffed' : '', cls].filter(Boolean).join(' ');
+  const mods = [c.enhancement && c.enhancement !== 'None' ? c.enhancement : '', c.edition && c.edition !== 'Base' ? c.edition : '', c.seal && c.seal !== 'None' ? `${c.seal} seal` : ''].filter(Boolean);
+  const title = `${c.chips} chips${mods.length ? ' · ' + mods.join(', ') : ''}`;
+  return `<span class="${classes}" title="${esc(title)}">${esc(c.label)}${badge ? `<span class="x">${badge}</span>` : ''}</span>`;
+}
+
+const HAND_ORDER = ['Flush Five', 'Flush House', 'Five of a Kind', 'Straight Flush', 'Four of a Kind', 'Full House', 'Flush', 'Straight', 'Three of a Kind', 'Two Pair', 'Pair', 'High Card'];
+
+function renderLevels(p) {
+  const box = $('levels');
+  const levels = p.handLevels;
+  if (!levels || p.phase === 'waiting') { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = HAND_ORDER.filter((h) => levels[h]).map((h) => {
+    const l = levels[h];
+    return `<div class="lvl${l.level > 1 ? ' up' : ''}" title="${esc(h)} level ${l.level}"><b>${esc(h)}</b><span class="n">lvl ${l.level} · ${num(l.chips)}×${num(l.mult)}</span></div>`;
+  }).join('');
 }
 const cardsHtml = (cs, cls = '', tight = false) => `<div class="cards${tight ? ' tight' : ''}">${cs.map((c) => cardHtml(c, cls)).join('')}</div>`;
 
@@ -207,8 +232,12 @@ function renderDeck(p) {
   const deck = $('deck');
   if (!p.deckCounts || p.phase === 'waiting') { deck.hidden = true; return; }
   deck.hidden = false;
-  $('deckCount').textContent = `· ${p.deckCount} cards`;
-  $('deckBody').innerHTML = SUITS.map(([suit, sym]) => {
+  const stones = p.stones || { hand: 0, deck: 0 };
+  $('deckCount').textContent = `· ${p.deckCount} cards` + (stones.deck || stones.hand ? ` · stone: ${stones.deck} in deck, ${stones.hand} in hand` : '');
+  const stoneRow = stones.deck
+    ? `<div class="suitrow"><div class="lbl">ST<small>${stones.deck} left</small></div><div class="cards tight">${Array.from({ length: stones.deck }, () => cardHtml({ stone: true, label: 'ST', chips: 50 }, 'mini')).join('')}</div></div>`
+    : '';
+  $('deckBody').innerHTML = stoneRow + SUITS.map(([suit, sym]) => {
     const red = RED.has(suit) ? 'red' : '';
     let total = 0;
     const cells = RANKS.map((r) => {
@@ -233,6 +262,7 @@ function render(p) {
   renderStatus(p);
   $('error').hidden = !p.error;
   $('error').textContent = p.error ? `Save could not be read: ${p.error}` : '';
+  renderLevels(p);
   renderRecommendation(p);
   renderAlternatives(p);
   renderDeck(p);

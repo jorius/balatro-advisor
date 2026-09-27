@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { advise } from '../src/engine/advisor.js';
 import { buildPayload } from '../src/cli.js';
 import { makeState, cards } from './helpers.js';
+import { cardFromSave } from '../src/engine/cards.js';
 
 /** Load public/index.html's inline script with a minimal DOM stub and return { render, els }. */
 async function loadPage() {
@@ -22,7 +23,7 @@ async function loadPage() {
   return { render: ctx.__render, els };
 }
 
-const ids = new Set(['status', 'error', 'rec', 'alts', 'altsBody', 'deck', 'deckCount', 'deckBody', 'notes', 'notesBody']);
+const ids = new Set(['status', 'error', 'levels', 'rec', 'alts', 'altsBody', 'deck', 'deckCount', 'deckBody', 'notes', 'notesBody']);
 
 test('every element id the script touches exists in the markup', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -34,12 +35,18 @@ test('every element id the script touches exists in the markup', async () => {
 test('renders shop, pending, final and out-of-reach states without throwing', async () => {
   const { render, els } = await loadPage();
 
-  render(buildPayload(makeState({ phase: 'shop', deck: cards('S_2 S_2 H_A') }), null, { savePath: 'x' }));
+  const shop = makeState({ phase: 'shop', deck: cards('S_2 S_2 H_A') });
+  shop.handLevels['Flush'] = { ...shop.handLevels['Flush'], level: 3, chips: 65, mult: 8 };
+  shop.deck.push(cardFromSave({ sort_id: 9, base: { id: 5, suit: 'Clubs', nominal: 5 }, ability: { effect: 'Stone Card', bonus: 50 } }, 'x'));
+  render(buildPayload(shop, null, { savePath: 'x' }));
   assert.match(els.rec.innerHTML, /In the shop/);
   assert.match(els.status.innerHTML, /updated/);
   assert.equal(els.alts.hidden, true);
   assert.match(els.deckBody.innerHTML, /×2/);           // duplicate badge
   assert.match(els.deckBody.innerHTML, /mini gone/);    // ghost slot for a missing card
+  assert.match(els.levels.innerHTML, /lvl up[^]*Flush[^]*lvl 3 · 65×8/);
+  assert.match(els.deckCount.textContent, /stone: 1 in deck/);
+  assert.match(els.deckBody.innerHTML, /card stone mini/);
 
   const state = makeState({ hand: cards('S_9 D_9 H_K C_2 S_3 D_7 C_8 H_A'), deck: cards('S_2 S_5 H_4 C_6'), target: 900, handsLeft: 2, discardsLeft: 1 });
   render(buildPayload(state, advise(state, { lookahead: false }), {}));

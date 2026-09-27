@@ -32,6 +32,20 @@ test('a flush of level 1 scores hand chips plus all five cards', () => {
   assert.equal(r.score, (35 + 2 + 5 + 9 + 10 + 10) * 4);
 });
 
+test('stone cards never shape the hand but always score their chips', () => {
+  const stone = () => ({ ...cards('S_5')[0], id: 'stone', stone: true, enhancement: 'Stone', chips: 50, label: 'ST' });
+  // Pair of nines + a stone: still a Pair, and the stone adds 50 chips → (10 + 18 + 50) × 2
+  const r = scorePlay([...cards('S_9 D_9'), stone()], makeState());
+  assert.equal(r.type, 'Pair');
+  assert.equal(r.score, (10 + 18 + 50) * 2);
+  // four hearts + a stone is not a flush
+  assert.equal(scorePlay([...cards('H_2 H_5 H_9 H_J'), stone()], makeState()).type, 'High Card');
+  // a lone stone is a High Card worth its chips
+  const lone = scorePlay([stone()], makeState());
+  assert.equal(lone.type, 'High Card');
+  assert.equal(lone.score, (5 + 50) * 1);
+});
+
 test('illegal plays report a reason', () => {
   assert.equal(scorePlay([], makeState()).legal, false);
   assert.equal(scorePlay(cards('S_2 S_3 S_4 S_5 S_6 S_7'), makeState()).legal, false);

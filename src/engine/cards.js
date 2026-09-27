@@ -22,8 +22,23 @@ export function isFace(card) {
   return card.rank >= 11 && card.rank <= 13;
 }
 
-export function makeCard({ id, rank, suit, chips = chipValue(rank), debuffed = false, playedThisAnte = false }) {
-  return { id, rank, suit, chips, debuffed, playedThisAnte, label: `${RANK_LABEL[rank]}${SUIT_SYMBOL[suit]}` };
+/** ability.effect in the save → enhancement name (Balatrolator vocabulary). */
+const ENHANCEMENT_BY_EFFECT = {
+  'Bonus Card': 'Bonus', 'Mult Card': 'Mult', 'Wild Card': 'Wild', 'Glass Card': 'Glass',
+  'Steel Card': 'Steel', 'Stone Card': 'Stone', 'Gold Card': 'Gold', 'Lucky Card': 'Lucky',
+};
+const EDITION_BY_TYPE = { foil: 'Foil', holo: 'Holographic', polychrome: 'Polychrome', negative: 'Negative' };
+const SEALS = new Set(['Red', 'Blue', 'Gold', 'Purple']);
+
+export function makeCard({
+  id, rank, suit, chips = chipValue(rank), debuffed = false, playedThisAnte = false,
+  enhancement = 'None', edition = 'Base', seal = 'None',
+}) {
+  const stone = enhancement === 'Stone';
+  return {
+    id, rank, suit, chips, debuffed, playedThisAnte, enhancement, edition, seal, stone,
+    label: stone ? 'ST' : `${RANK_LABEL[rank]}${SUIT_SYMBOL[suit]}`,
+  };
 }
 
 /** 'H_Q' → Queen of Hearts. Ranks: 2-9, T, J, Q, K, A. */
@@ -47,11 +62,19 @@ export function cardFromSave(raw, fallbackId) {
   const suit = base.suit;
   if (!Number.isInteger(rank) || rank < 2 || rank > 14 || !SUITS.includes(suit)) return null;
   const id = raw.sort_id != null ? `c${raw.sort_id}` : String(fallbackId);
-  const chips = Number.isFinite(base.nominal) ? base.nominal : chipValue(rank);
+  const ability = raw.ability && typeof raw.ability === 'object' ? raw.ability : {};
+  const enhancement = ENHANCEMENT_BY_EFFECT[ability.effect] ?? 'None';
+  const edition = EDITION_BY_TYPE[raw.edition?.type] ?? 'Base';
+  const seal = SEALS.has(raw.seal) ? raw.seal : 'None';
+  const nominal = Number.isFinite(base.nominal) ? base.nominal : chipValue(rank);
+  const extra = (Number.isFinite(ability.bonus) ? ability.bonus : 0) + (Number.isFinite(ability.perma_bonus) ? ability.perma_bonus : 0);
+  // Mirrors Card:get_chip_bonus: a Stone card scores only its bonus, every other card nominal + bonus.
+  const chips = enhancement === 'Stone' ? extra : nominal + extra;
   return makeCard({
     id, rank, suit, chips,
     debuffed: raw.debuff === true,
-    playedThisAnte: raw.ability?.played_this_ante === true,
+    playedThisAnte: ability.played_this_ante === true,
+    enhancement, edition, seal,
   });
 }
 

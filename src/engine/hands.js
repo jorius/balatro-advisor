@@ -72,9 +72,21 @@ function getHighest(cards) {
   return h;
 }
 
-/** Returns { type, scoringCards } for 1..5 cards, or null for an empty list. */
-export function evaluateHand(cards, rules = DEFAULT_RULES) {
-  if (cards.length === 0) return null;
+/**
+ * Returns { type, scoringCards } for 1..5 cards, or null for an empty list.
+ * Stone cards have no rank or suit in the game (get_id is negative, is_suit is false), so they never
+ * take part in hand detection; evaluate_play adds them to the scoring cards afterwards as "pures".
+ */
+export function evaluateHand(allCards, rules = DEFAULT_RULES) {
+  if (allCards.length === 0) return null;
+  const stones = allCards.filter((c) => c.stone);
+  const cards = stones.length ? allCards.filter((c) => !c.stone) : allCards;
+  if (cards.length === 0) return { type: 'High Card', scoringCards: stones };
+  const ev = evaluateRanked(cards, rules);
+  return stones.length ? { type: ev.type, scoringCards: [...ev.scoringCards, ...stones] } : ev;
+}
+
+function evaluateRanked(cards, rules) {
   const min = rules.fourFingers ? 4 : 5;
   const byRank = [];
   for (const c of cards) (byRank[c.rank] ||= []).push(c);

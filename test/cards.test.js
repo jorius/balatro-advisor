@@ -39,6 +39,19 @@ test('cardFromSave maps save fields and rejects junk', () => {
   assert.equal(cardFromSave({}, 'x'), null);
 });
 
+test('cardFromSave reads enhancements, editions, seals and bonus chips', () => {
+  const base = { id: 9, suit: 'Hearts', nominal: 9 };
+  const plain = cardFromSave({ sort_id: 1, base, ability: { effect: 'Base', bonus: 0 } }, 'a');
+  assert.deepEqual([plain.enhancement, plain.edition, plain.seal, plain.stone, plain.chips], ['None', 'Base', 'None', false, 9]);
+  const stone = cardFromSave({ sort_id: 2, base, ability: { effect: 'Stone Card', bonus: 50, perma_bonus: 10 } }, 'b');
+  assert.equal(stone.stone, true);
+  assert.equal(stone.chips, 60);
+  assert.equal(stone.label, 'ST');
+  const fancy = cardFromSave({ sort_id: 3, base, ability: { effect: 'Bonus Card', bonus: 30 }, edition: { type: 'polychrome', polychrome: true }, seal: 'Red' }, 'c');
+  assert.deepEqual([fancy.enhancement, fancy.edition, fancy.seal, fancy.chips], ['Bonus', 'Polychrome', 'Red', 39]);
+  assert.equal(cardFromSave({ sort_id: 4, base, ability: { effect: 'Glass Card' }, edition: { type: 'negative' }, seal: 'Nope' }, 'd').seal, 'None');
+});
+
 test('HAND_BASE matches game.lua and defaultHandLevels expands it', () => {
   assert.deepEqual(HAND_BASE['Pair'], [10, 2, 15, 1]);
   assert.deepEqual(HAND_BASE['Straight Flush'], [100, 8, 40, 4]);
