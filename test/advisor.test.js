@@ -86,6 +86,25 @@ test('is deterministic for the same seed and reports timing', () => {
   assert.equal(a.samples, 16);
 });
 
+test('lookahead:false returns the exact ranking instantly and marks the advice pending', () => {
+  const hand = cards('H_2 H_7 H_9 H_J S_4 C_3 D_6 S_8');
+  const deck = cards('H_3 S_5 C_6 D_7 H_8 S_T H_Q C_K D_A S_2 C_4 D_9');
+  const state = makeState({ hand, deck, target: 400 });
+  const t0 = performance.now();
+  const a = advise(state, { lookahead: false, seed: 'q' });
+  assert.ok(performance.now() - t0 < 50);
+  assert.equal(a.pending, true);
+  assert.equal(a.action, 'play');
+  assert.equal(a.pClear, null);
+  assert.equal(a.samples, 0);
+  assert.ok(a.alternatives.length > 0 && a.alternatives.every(o => o.action === 'play' && o.pClear === null));
+  assert.match(a.reason, /Checking discards/);
+  // an immediate win is final even without lookahead
+  const win = advise(makeState({ hand: cards('S_9 D_9'), target: 50 }), { lookahead: false });
+  assert.equal(win.pending, false);
+  assert.equal(win.clearsBlind, true);
+});
+
 test('non-selecting phase or no hands left yields no action', () => {
   assert.equal(advise(makeState({ phase: 'shop' })).action, 'none');
   assert.equal(advise(makeState({ hand: cards('S_2'), handsLeft: 0 })).action, 'none');

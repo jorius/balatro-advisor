@@ -8,7 +8,7 @@ import path from 'node:path';
  * Uses fs.watch on the directory (so a file created later is seen) plus a slow poll as a safety net.
  * Read errors other than "file missing" are reported as onSnapshot({ error, path }).
  */
-export function watchSave(savePath, onSnapshot, { debounceMs = 150, pollMs = 2000 } = {}) {
+export function watchSave(savePath, onSnapshot, { debounceMs = 40, pollMs = 2000 } = {}) {
   const dir = path.dirname(savePath);
   const file = path.basename(savePath);
   let timer = null;

@@ -14,33 +14,56 @@
   .muted { color:var(--muted); }
   section { margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
   h2 { margin:0 0 10px; font-size:0.85rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+
+  /* cards */
+  .cards { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .cards.tight { gap:4px; margin:0; }
+  .card { position:relative; display:inline-flex; align-items:center; justify-content:center; min-width:52px; height:68px; padding:0 8px; border-radius:8px; background:#f4f1ea; color:#1a1a1a; font-size:1.5rem; font-weight:700; box-shadow:0 2px 0 #b9b2a3; }
+  .card.red { color:#c8323e; }
+  .card.debuffed { opacity:.45; text-decoration:line-through; }
+  .card.small { min-width:40px; height:52px; font-size:1.15rem; padding:0 6px; }
+  .card.mini { min-width:34px; height:44px; font-size:1rem; padding:0 4px; border-radius:6px; box-shadow:0 1px 0 #b9b2a3; }
+  .card.hint { outline:3px solid var(--blue); }
+  .card.gone { background:transparent; color:var(--line); box-shadow:none; border:1px dashed var(--line); }
+  .card .x { position:absolute; top:-6px; right:-6px; font-size:.65rem; font-weight:700; background:var(--amber); color:#1a1a1a; border-radius:999px; padding:1px 5px; }
+
+  /* recommendation */
   #rec { border-color:var(--blue); }
   #rec.discard { border-color:var(--amber); }
   #rec.win { border-color:var(--green); }
   #rec .action { font-size:2.2rem; font-weight:800; letter-spacing:.02em; }
   #rec.play .action { color:var(--blue); } #rec.discard .action { color:var(--amber); } #rec.win .action { color:var(--green); }
-  .cards { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-  .card { display:inline-flex; align-items:center; justify-content:center; min-width:52px; height:68px; padding:0 8px; border-radius:8px; background:#f4f1ea; color:#1a1a1a; font-size:1.5rem; font-weight:700; box-shadow:0 2px 0 #b9b2a3; }
-  .card.red { color:#c8323e; }
-  .card.debuffed { opacity:.45; text-decoration:line-through; }
-  .card.small { min-width:40px; height:48px; font-size:1.1rem; }
-  .card.hint { outline:3px solid var(--blue); }
-  .reason { font-size:1.15rem; margin-top:6px; }
-  table { width:100%; border-collapse:collapse; font-size:0.95rem; }
-  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
-  th { color:var(--muted); font-weight:600; }
-  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
-  .grid { display:grid; grid-template-columns:auto repeat(13, 1fr); gap:3px; font-variant-numeric:tabular-nums; }
-  .grid div { text-align:center; padding:4px 0; border-radius:4px; background:#232838; }
-  .grid .h { background:transparent; color:var(--muted); font-size:.8rem; }
-  .grid .zero { opacity:.25; }
-  .grid .red { color:var(--red); }
-  .warn { color:var(--amber); }
-  .err { background:#3a1f25; color:#ffb4bb; padding:8px 12px; border-radius:8px; margin-top:12px; }
+  #rec .sub { font-size:1.1rem; }
+  #rec .reason { font-size:1.05rem; margin-top:8px; color:var(--muted); }
+  #rec .pending { color:var(--amber); }
   .idle { font-size:1.4rem; padding:24px; text-align:center; color:var(--muted); }
   .dim { opacity:.4; }
+
+  /* alternatives */
+  .alt { display:grid; grid-template-columns:96px 1fr auto; gap:12px; align-items:center; padding:8px 0; border-top:1px solid var(--line); }
+  .alt:first-child { border-top:0; }
+  .alt .kind { font-weight:800; letter-spacing:.04em; font-size:.85rem; }
+  .alt .kind.play { color:var(--blue); } .alt .kind.discard { color:var(--amber); }
+  .alt .kind small { display:block; font-weight:500; color:var(--muted); letter-spacing:0; }
+  .alt .stats { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .alt .stats b { font-size:1.15rem; }
+  .alt .stats span { display:block; color:var(--muted); font-size:.85rem; }
+
+  /* deck */
+  .suitrow { display:grid; grid-template-columns:64px 1fr; gap:8px; align-items:center; padding:6px 0; }
+  .suitrow .lbl { font-size:1.3rem; font-weight:700; }
+  .suitrow .lbl small { display:block; font-size:.8rem; color:var(--muted); font-weight:500; }
+  .suitrow .lbl.red { color:var(--red); }
+
+  .warn { color:var(--amber); }
+  .err { background:#3a1f25; color:#ffb4bb; padding:8px 12px; border-radius:8px; margin-top:12px; }
   .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:#232838; color:var(--muted); font-size:.8rem; margin-right:6px; }
   footer { margin-top:16px; color:var(--muted); font-size:.8rem; }
+  @media (max-width: 600px) {
+    .alt { grid-template-columns:72px 1fr; }
+    .alt .stats { grid-column: 1 / -1; text-align:left; }
+    .alt .stats span { display:inline; margin-left:8px; }
+  }
 </style>
 </head>
 <body>
@@ -48,8 +71,7 @@
 <div id="error" class="err" hidden></div>
 <section id="rec"><div class="idle">Waiting for Balatro…</div></section>
 <section id="alts" hidden><h2>Alternatives</h2><div id="altsBody"></div></section>
-<section id="plays" hidden><h2>Best scoring plays</h2><div id="playsBody"></div></section>
-<section id="deck" hidden><h2>Remaining deck</h2><div id="deckBody"></div></section>
+<section id="deck" hidden><h2>Remaining deck <span id="deckCount" class="muted"></span></h2><div id="deckBody"></div></section>
 <section id="notes" hidden><h2>Warnings &amp; jokers</h2><div id="notesBody"></div></section>
 <footer id="foot"></footer>
 <script>
@@ -62,88 +84,127 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;',
 const pct = (x) => Math.round(x * 100) + '%';
 const num = (x) => Math.round(x).toLocaleString();
 const PHASE_TEXT = { waiting:'Waiting for Balatro save…', shop:'In the shop', blind_select:'Choosing a blind', round_eval:'Round over', game_over:'Game over', other:'Waiting for the next hand…' };
+const keyOf = (cards) => cards.map((c) => c.id).sort().join(',');
 
-function cardHtml(c, cls = '') {
+function cardHtml(c, cls = '', badge = '') {
   const classes = ['card', RED.has(c.suit) ? 'red' : '', c.debuffed ? 'debuffed' : '', cls].filter(Boolean).join(' ');
-  return `<span class="${classes}" title="${c.chips} chips">${esc(c.label)}</span>`;
+  return `<span class="${classes}" title="${c.chips} chips">${esc(c.label)}${badge ? `<span class="x">${badge}</span>` : ''}</span>`;
 }
-const cardsHtml = (cs, cls = '') => `<div class="cards">${cs.map((c) => cardHtml(c, cls)).join('')}</div>`;
-const inline = (cs) => cs.map((c) => `<span class="${RED.has(c.suit) ? 'red' : ''}">${esc(c.label)}</span>`).join(' ');
+const cardsHtml = (cs, cls = '', tight = false) => `<div class="cards${tight ? ' tight' : ''}">${cs.map((c) => cardHtml(c, cls)).join('')}</div>`;
 
-function render(p) {
+function renderStatus(p) {
   const st = $('status');
   if (p.phase === 'waiting') {
     st.innerHTML = `<span class="big">Balatro Advisor</span><span class="muted">${esc(PHASE_TEXT.waiting)}</span>`;
-  } else {
-    const cleared = p.chipsScored >= p.blind.target && p.blind.target > 0;
-    st.innerHTML = `
-      <span class="big">Ante ${p.ante} · Round ${p.round}</span>
-      <span>${esc(p.blind.name || p.blindOnDeck || '')}</span>
-      <span class="big ${cleared ? 'ok' : ''}">${num(p.chipsScored)} / ${num(p.blind.target)}</span>
-      <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span></span>`;
+    return;
   }
-  $('error').hidden = !p.error;
-  $('error').textContent = p.error ? `Save could not be read: ${p.error}` : '';
+  const cleared = p.chipsScored >= p.blind.target && p.blind.target > 0;
+  st.innerHTML = `
+    <span class="big">Ante ${p.ante} · Round ${p.round}</span>
+    <span>${esc(p.blind.name || p.blindOnDeck || '')}</span>
+    <span class="big ${cleared ? 'ok' : ''}">${num(p.chipsScored)} / ${num(p.blind.target)}</span>
+    <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span></span>`;
+}
 
+function renderRecommendation(p) {
   const rec = $('rec');
   const a = p.advice;
   if (p.phase !== 'selecting' || !a) {
     rec.className = '';
     rec.innerHTML = `<div class="idle">${esc(PHASE_TEXT[p.phase] || PHASE_TEXT.other)}</div>` + (p.hand && p.hand.length ? `<div class="dim">${cardsHtml(p.hand, 'small')}</div>` : '');
-  } else if (a.action === 'none') {
+    return;
+  }
+  if (a.action === 'none') {
     rec.className = '';
     rec.innerHTML = `<div class="idle">${esc(a.reason)}</div>${cardsHtml(p.hand, 'small')}`;
-  } else {
-    const pick = new Set(a.cards.map((c) => c.id));
-    rec.className = a.clearsBlind ? 'win' : a.action;
-    const headline = a.action === 'play'
-      ? `PLAY ${esc(a.handType)} · ${num(a.score)}`
-      : `DISCARD ${a.cards.length}`;
-    const sub = a.clearsBlind
-      ? `Clears the blind (${num(a.remaining)} needed).`
-      : a.action === 'play'
-        ? `Leaves ${num(Math.max(0, a.remaining - a.score))} to go · ${pct(a.pClear)} to clear this round`
-        : `${pct(a.pClear)} to clear this round · expected ${num(a.expChips)} chips`;
-    rec.innerHTML = `<div class="action">${headline}</div><div>${sub}</div>${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>
-      <div class="muted" style="margin-top:8px">Your hand</div>${cardsHtml(p.hand, 'small')}`;
-    rec.querySelectorAll('.card.small').forEach((el, i) => { if (pick.has(p.hand[i].id)) el.classList.add('hint'); });
+    return;
   }
+  const pick = new Set(a.cards.map((c) => c.id));
+  rec.className = a.clearsBlind ? 'win' : a.action;
+  const headline = a.action === 'play' ? `PLAY ${esc(a.handType)} · ${num(a.score)}` : `DISCARD ${a.cards.length}`;
+  let sub;
+  if (a.clearsBlind) sub = `Clears the blind (${num(a.remaining)} needed).`;
+  else if (a.pending) sub = `<span class="pending">Best play right now · checking discards…</span>`;
+  else if (a.action === 'play') sub = `Leaves ${num(Math.max(0, a.remaining - a.score))} to go · ${pct(a.pClear)} to clear this round`;
+  else sub = `${pct(a.pClear)} to clear this round · expected ${num(a.expChips)} chips`;
+  rec.innerHTML = `<div class="action">${headline}</div><div class="sub">${sub}</div>${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>
+    <div class="muted" style="margin-top:10px">Your hand</div>${cardsHtml(p.hand, 'small')}`;
+  rec.querySelectorAll('.card.small').forEach((el, i) => { if (pick.has(p.hand[i].id)) el.classList.add('hint'); });
+}
 
+/** Lookahead candidates first, then the remaining best-scoring plays, de-duplicated by card set. */
+function mergedAlternatives(a) {
+  const seen = new Set([keyOf(a.cards)]);
+  const out = [];
+  for (const o of a.alternatives || []) {
+    const k = keyOf(o.cards);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(o);
+  }
+  for (const pl of a.topPlays || []) {
+    const k = keyOf(pl.cards);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ action: 'play', cards: pl.cards, handType: pl.handType, score: pl.score, pClear: null, expChips: null });
+  }
+  return out.slice(0, 8);
+}
+
+function renderAlternatives(p) {
+  const a = p.advice;
   const alts = $('alts');
-  if (a && a.alternatives && a.alternatives.length) {
-    alts.hidden = false;
-    $('altsBody').innerHTML = `<table><tr><th>Action</th><th>Cards</th><th>Hand</th><th class="num">Score</th><th class="num">Clear</th><th class="num">Exp. chips</th></tr>` +
-      a.alternatives.map((o) => `<tr><td>${o.action === 'play' ? 'Play' : 'Discard'}</td><td>${inline(o.cards)}</td><td>${esc(o.handType || '')}</td><td class="num">${o.score != null ? num(o.score) : ''}</td><td class="num">${pct(o.pClear)}</td><td class="num">${num(o.expChips)}</td></tr>`).join('') + '</table>';
-  } else alts.hidden = true;
+  const list = p.phase === 'selecting' && a && a.action !== 'none' ? mergedAlternatives(a) : [];
+  if (!list.length) { alts.hidden = true; return; }
+  alts.hidden = false;
+  $('altsBody').innerHTML = list.map((o) => {
+    const kind = o.action === 'play'
+      ? `<div class="kind play">PLAY<small>${esc(o.handType || '')}</small></div>`
+      : `<div class="kind discard">DISCARD<small>${o.cards.length} card${o.cards.length > 1 ? 's' : ''}</small></div>`;
+    const stats = o.pClear == null
+      ? `<div class="stats">${o.score != null ? `<b>${num(o.score)}</b><span>score</span>` : ''}</div>`
+      : `<div class="stats"><b>${pct(o.pClear)}</b><span>to clear · exp. ${num(o.expChips)}${o.score != null ? ` · scores ${num(o.score)}` : ''}</span></div>`;
+    return `<div class="alt">${kind}${cardsHtml(o.cards, 'small', true)}${stats}</div>`;
+  }).join('');
+}
 
-  const plays = $('plays');
-  if (a && a.topPlays && a.topPlays.length) {
-    plays.hidden = false;
-    $('playsBody').innerHTML = `<table><tr><th>Hand</th><th>Cards</th><th class="num">Score</th></tr>` +
-      a.topPlays.map((o) => `<tr><td>${esc(o.handType)}</td><td>${inline(o.cards)}</td><td class="num">${num(o.score)}</td></tr>`).join('') + '</table>';
-  } else plays.hidden = true;
-
+function renderDeck(p) {
   const deck = $('deck');
-  if (p.deckCounts && p.phase !== 'waiting') {
-    deck.hidden = false;
-    let html = '<div class="grid"><div class="h"></div>' + RANKS.map((r) => `<div class="h">${RANK_LABEL[r]}</div>`).join('');
-    for (const [suit, sym] of SUITS) {
-      const red = RED.has(suit) ? 'red' : '';
-      let total = 0;
-      let row = '';
-      for (const r of RANKS) { const n = p.deckCounts[`${suit}:${r}`] || 0; total += n; row += `<div class="${n ? red : 'zero'}">${n}</div>`; }
-      html += `<div class="h ${red}">${sym} ${total}</div>` + row;
-    }
-    $('deckBody').innerHTML = html + '</div>';
-  } else deck.hidden = true;
+  if (!p.deckCounts || p.phase === 'waiting') { deck.hidden = true; return; }
+  deck.hidden = false;
+  $('deckCount').textContent = `· ${p.deckCount} cards`;
+  $('deckBody').innerHTML = SUITS.map(([suit, sym]) => {
+    const red = RED.has(suit) ? 'red' : '';
+    let total = 0;
+    const cells = RANKS.map((r) => {
+      const n = p.deckCounts[`${suit}:${r}`] || 0;
+      total += n;
+      const c = { suit, rank: r, label: RANK_LABEL[r] + sym, chips: r === 14 ? 11 : r > 10 ? 10 : r, debuffed: false };
+      return n ? cardHtml(c, 'mini', n > 1 ? `×${n}` : '') : cardHtml(c, 'mini gone');
+    }).join('');
+    return `<div class="suitrow"><div class="lbl ${red}">${sym}<small>${total} left</small></div><div class="cards tight">${cells}</div></div>`;
+  }).join('');
+}
 
+function renderNotes(p) {
   const notes = [];
   for (const w of p.warnings || []) notes.push(`<div class="warn">⚠ ${esc(w)}</div>`);
   if (p.jokers && p.jokers.length) notes.push(`<div class="muted">Jokers (not scored): ${p.jokers.map((j) => esc(j.name || j.key)).join(', ')}</div>`);
   $('notes').hidden = notes.length === 0;
   $('notesBody').innerHTML = notes.join('');
+}
 
-  $('foot').textContent = (a && a.samples ? `${a.samples} samples per option · ${Math.round(a.elapsedMs)} ms · ` : '') + `updated ${new Date(p.updatedAt).toLocaleTimeString()}`;
+function render(p) {
+  renderStatus(p);
+  $('error').hidden = !p.error;
+  $('error').textContent = p.error ? `Save could not be read: ${p.error}` : '';
+  renderRecommendation(p);
+  renderAlternatives(p);
+  renderDeck(p);
+  renderNotes(p);
+  const a = p.advice;
+  const timing = a && a.samples ? `${a.samples} samples per option · ${Math.round(a.elapsedMs)} ms · ` : (a && a.pending ? 'lookahead running · ' : '');
+  $('foot').textContent = timing + `updated ${new Date(p.updatedAt).toLocaleTimeString()}`;
 }
 
 function connect() {

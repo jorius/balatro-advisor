@@ -48,7 +48,7 @@ export function buildPayload(state, advice, extra = {}) {
       clearsBlind: advice.clearsBlind, remaining: advice.remaining, pClear: advice.pClear, expChips: advice.expChips,
       reason: advice.reason, alternatives: advice.alternatives.map(opt),
       topPlays: advice.topPlays.map((p) => ({ cards: p.cards.map(serializeCard), handType: p.handType, score: p.score })),
-      samples: advice.samples, elapsedMs: advice.elapsedMs,
+      samples: advice.samples, elapsedMs: advice.elapsedMs, pending: advice.pending === true,
     } : null,
     error: null,
     ...extra,
@@ -80,21 +80,38 @@ export async function main(argv = process.argv.slice(2)) {
 
   let lastPayload = { updatedAt: new Date().toISOString(), phase: 'waiting', savePath, warnings: [], advice: null, error: null };
   server.broadcast(lastPayload);
+  let latestSeq = 0;
+  const stamp = () => new Date().toLocaleTimeString();
+  const describe = (advice) => `${advice.action.toUpperCase()} ${advice.cards.map((c) => c.label).join(' ')}  —  ${advice.reason}`;
 
   watchSave(savePath, async (snap) => {
     if (snap.error) {
       server.broadcast({ ...lastPayload, error: String(snap.error.message || snap.error) });
       return;
     }
+    const seq = ++latestSeq;
     try {
       const raw = await parseWithRetry(savePath, snap.buf);
       const state = extractState(raw);
-      const advice = state.phase === 'selecting' ? advise(state, { budgetMs: args.budgetMs, seed: snap.hash }) : null;
-      lastPayload = buildPayload(state, advice, { savePath });
+      if (state.phase !== 'selecting') {
+        lastPayload = buildPayload(state, null, { savePath });
+        server.broadcast(lastPayload);
+        console.log(`[${stamp()}] ${state.phase}`);
+        return;
+      }
+      // Phase 1: instant exact ranking so the page updates the moment the save lands.
+      const quick = advise(state, { lookahead: false, seed: snap.hash });
+      lastPayload = buildPayload(state, quick, { savePath });
       server.broadcast(lastPayload);
-      const stamp = new Date().toLocaleTimeString();
-      if (advice) console.log(`[${stamp}] ${advice.action.toUpperCase()} ${advice.cards.map((c) => c.label).join(' ')}  —  ${advice.reason}  (${advice.samples} samples, ${Math.round(advice.elapsedMs)} ms)`);
-      else console.log(`[${stamp}] ${state.phase}`);
+      console.log(`[${stamp()}] ${describe(quick)}`);
+      // Let the SSE write flush before the CPU-heavy lookahead, and skip it if a newer save arrived.
+      await new Promise((r) => setImmediate(r));
+      if (seq !== latestSeq) return;
+      const full = advise(state, { budgetMs: args.budgetMs, seed: snap.hash });
+      if (seq !== latestSeq) return;
+      lastPayload = buildPayload(state, full, { savePath });
+      server.broadcast(lastPayload);
+      console.log(`[${stamp()}] ${describe(full)}  (${full.samples} samples, ${Math.round(full.elapsedMs)} ms)`);
     } catch (e) {
       console.error('snapshot failed:', e.message);
       server.broadcast({ ...lastPayload, error: e.message });

@@ -133,7 +133,7 @@ export function advise(state, opts = {}) {
   const base = {
     action: 'none', cards: [], handType: undefined, score: undefined, clearsBlind: false, remaining,
     pClear: 0, expChips: state.chipsScored, reason: '', alternatives: [], topPlays: [],
-    warnings: [...rules.warnings], samples: 0, elapsedMs: 0, seed,
+    warnings: [...rules.warnings], samples: 0, elapsedMs: 0, seed, pending: false,
   };
   const done = (fields) => ({ ...base, ...fields, elapsedMs: performance.now() - t0 });
 
@@ -154,6 +154,16 @@ export function advise(state, opts = {}) {
       expChips: state.chipsScored + best.score, topPlays,
       reason: `${best.type} for ${best.score} clears the blind (${remaining} needed).`,
       alternatives: clearing.slice(1, 7).map((p) => ({ action: 'play', cards: p.cards, handType: p.type, score: p.score, pClear: 1, expChips: state.chipsScored + p.score, samples: 0 })),
+    });
+  }
+
+  if (opts.lookahead === false) {
+    // Instant answer: exact ranking only. The caller runs the full lookahead afterwards.
+    return done({
+      action: 'play', cards: best.cards, handType: best.type, score: best.score, clearsBlind: false,
+      pClear: null, expChips: null, pending: true, topPlays,
+      reason: `Best play now: ${best.type} for ${best.score} (${remaining} needed). Checking discards…`,
+      alternatives: plays.slice(1, 7).map((p) => ({ action: 'play', cards: p.cards, handType: p.type, score: p.score, pClear: null, expChips: null, samples: 0 })),
     });
   }
 

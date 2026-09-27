@@ -14,6 +14,7 @@ Must work for the current run and for any future run without reconfiguration.
 Verified against the game's Lua source extracted from `Balatro.exe` (files dated 2025-02-21).
 
 - Balatro writes `%APPDATA%\Balatro\<profile>\save.jkr` from one routine, `save_run()` in `functions/misc_functions.lua`. It is called when the game enters hand selection after cards are drawn (`Game:update_selecting_hand`), on blind select, on round evaluation, and after shop purchases. A fresh snapshot therefore exists at every decision point.
+- **Save throttle (source of the visible delay):** `save_run()` only *queues* the write (`G.FILE_HANDLER.update_queued`). `Game:update` (game.lua ≈ line 2686) flushes the queue to the save thread only when `G.FILE_HANDLER.force` is set, the stage changes, the pause state toggles, or `G.F_SAVE_TIMER` seconds have passed since the last flush. `F_SAVE_TIMER` is 5 on Windows and macOS (globals.lua). `force` is set only at round end, game win/over, unlocks and profile loads, never after a play or discard. So mid-round the file can lag the screen by 0 to 5 s. Nothing outside the game can change this; a one-line Lovely patch setting `F_SAVE_TIMER = 0` would make every queued save flush on the next frame.
 - The file is the output of `STR_PACK` (`engine/string_packer.lua`): a Lua table literal beginning with `return {`, compressed with `love.data.compress('string','deflate',…)`, which produces a **raw deflate** stream (no zlib header). `zlib.inflateRawSync` decodes it. Files whose text begins with `return` are stored uncompressed; the reader must accept both.
 - Serializer rules the parser must handle: keys are `["string"]` or `[integer]`; string values use Lua `%q` quoting (`\"`, `\\`, backslash-newline, `\ddd` decimal escapes); numbers are Lua `tostring` output and can be `1e+15`, `inf`, `-inf`, `nan`, `-nan(ind)`; booleans; nested tables; trailing commas. Tables whose keys are exactly 1..n are exposed as arrays.
 - Top-level fields used: `STATE`, `BLIND`, `cardAreas`, `GAME`.
@@ -145,6 +146,7 @@ Algorithm:
 5. Rank candidates by `pClear` descending, then `expChips` descending, then prefer `play` on exact ties. The top candidate is the recommendation; the next 6 are `alternatives`.
 6. **Budget:** default 500 ms. Start at 64 samples per candidate; while elapsed < 60% of budget, double the sample count (continuing the same PRNG stream) up to 512. Report samples used. `budgetMs` is configurable.
 7. `reason` is one sentence, e.g. `Play now clears 41% of the time; discarding 3♦ 6♣ clears 68%.`
+8. **Two-phase delivery.** `advise(state, { lookahead: false })` returns steps 1–3 only, in a few milliseconds, with `pending: true` and `pClear`/`expChips` set to `null` (an immediate win is already final). The CLI broadcasts that first, yields to the event loop so the SSE write flushes, then runs the full lookahead and broadcasts again. A newer snapshot arriving in between cancels the stale lookahead (sequence number check). The watcher debounce is 40 ms.
 
 Edge cases: `handsLeft = 0` in selecting phase → `action: 'none'`. Deck smaller than the draw count → draw what remains. Hand smaller than 5 (The Manacle, late deck) → subsets are limited accordingly; if no legal play exists (e.g. The Psychic with 4 cards in hand) → `action: 'none'` with a warning.
 
@@ -153,9 +155,9 @@ Edge cases: `handsLeft = 0` in selecting phase → `action: 'none'`. Deck smalle
 Single static file `public/index.html`, served at `http://127.0.0.1:8787` (use `--host 0.0.0.0` to reach it from a phone on the LAN). Dark theme, large type, no build step, updates via SSE without reload. Sections top to bottom:
 
 1. **Status bar**: ante/round, blind name, `chipsScored / target`, hands and discards left. Green when the target is met.
-2. **Recommendation**: `PLAY` + cards + hand type + exact score + "clears the blind" / "leaves N to go", or `DISCARD` + cards + expected best score after redraw + clear probability. One-sentence reason.
-3. **Alternatives table**: up to 6 rows: action, cards, hand type/score, clear %, expected chips.
-4. **Deck panel**: 4×13 grid of remaining cards with counts per rank and suit totals.
+2. **Recommendation**: `PLAY` + cards + hand type + exact score + "clears the blind" / "leaves N to go", or `DISCARD` + cards + expected best score after redraw + clear probability. One-sentence reason. While the lookahead is pending it shows the best exact play with "checking discards…". The player's whole hand is shown below it with the recommended cards outlined.
+3. **Alternatives**: one merged list, up to 8 rows, each rendered as card chips: lookahead candidates first (with clear % and expected chips), then the remaining best-scoring plays (score only), de-duplicated by card set.
+4. **Deck panel**: one row per suit, 13 fixed slots rendered as mini cards; a slot the deck no longer holds is a dashed ghost, duplicates carry a `×n` badge. Suit totals on the left.
 5. **Warnings**: unmodelled boss effect (with effect text), jokers held (names only), parse/read errors.
 6. **Idle states**: "In shop", "Choosing blind", "Round over", "Game over", "Waiting for Balatro save…" with the last recommendation greyed out.
 

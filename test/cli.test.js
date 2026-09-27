@@ -26,5 +26,9 @@ test('buildPayload serialises state and advice for the page', () => {
   assert.deepEqual(p.jokers, [{ key: 'j_trio', name: 'Trio' }]);
   assert.equal(p.savePath, 'x');
   assert.equal(p.error, null);
+  assert.equal(p.advice.pending, false);
   assert.equal(buildPayload(makeState({ phase: 'shop' }), null).advice, null);
+  const quick = buildPayload(state, advise(makeState({ hand: cards('S_9 D_9 H_K'), target: 900 }), { lookahead: false }));
+  assert.equal(quick.advice.pending, true);
+  assert.equal(quick.advice.pClear, null);
 });
