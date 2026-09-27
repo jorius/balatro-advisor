@@ -44,7 +44,7 @@ Balatro writes save.jkr
 |---|---|---|
 | `src/save/reader.js` | Locate profile, read and decode `save.jkr` and `settings.jkr` | `resolvePaths({appData, profile?, save?}) → {settingsPath, savePath}`, `readLuaFile(path) → Promise<string>` |
 | `src/save/lua-table.js` | Parse `STR_PACK` output | `parseLuaTable(text) → object` (arrays for 1..n keyed tables) |
-| `src/save/watcher.js` | Emit new snapshots | `watchSave(savePath, onSnapshot, {debounceMs}) → {close()}`; snapshot = `{text, hash, mtimeMs}`; duplicate hashes are dropped |
+| `src/save/watcher.js` | Emit new snapshots | `watchSave(savePath, onSnapshot, {debounceMs, pollMs}) → {close()}`; snapshot = `{buf, hash, path}` (raw bytes; the CLI decodes and re-reads the file on retry); duplicate hashes and empty reads are dropped; a slow poll backs up `fs.watch` |
 | `src/state/extract.js` | Reduce raw save to `GameState` | `extractState(raw) → GameState` |
 | `src/engine/cards.js` | Card model, chip values, deck composition helpers | `cardFromSave(rawCard) → Card`, `chipValue(card)` |
 | `src/engine/hands.js` | Port of `evaluate_poker_hand`, scoring | `evaluateHand(cards, rules) → {type, scoringCards}`, `scorePlay(cards, state, rules) → PlayResult` |
@@ -137,9 +137,9 @@ Algorithm:
 1. `remaining = max(0, target − chipsScored)`. Build `rules` from the blind and joker flags.
 2. Enumerate every legal subset of 1–5 cards from the hand (≤ 218 for 8 cards; 56 when The Psychic forces 5). Score each with the engine. Sort by score, then by fewer cards.
 3. **Immediate win:** if the best play's score ≥ `remaining`, recommend it. `pClear = 1`. Alternatives = other clearing plays, then the next best plays.
-4. **Otherwise, lookahead.** Candidates: `play(S)` for the top 5 plays by score, and `discard(D)` for every subset `D` of 1–5 cards if `discardsLeft > 0`. Each candidate is evaluated by Monte Carlo rollouts over the **known remaining deck** (`state.deck`), sampled without replacement with a seeded PRNG (seed = snapshot hash, so identical states give identical advice).
-   - After `play(S)`: chips += score(S), handsLeft −= 1, draw `|S|` cards (3 under The Serpent, capped by deck size).
-   - After `discard(D)`: discardsLeft −= 1, draw `|D|` cards (same caps).
+4. **Otherwise, lookahead.** Candidates: `play(S)` for the top 5 plays by score, and `discard(D)` for each candidate discard set if `discardsLeft > 0`. Candidate discard sets are the complements (lowest chips first, at most 5 cards) of these keep-sets: the top 3 plays, each suit held 3+ times, each rank held 2+ times and the union of the two highest such groups, each 5-rank straight window in which 3+ ranks are held, plus the k lowest cards for k = 1..5, de-duplicated. This keeps the lookahead inside the time budget; the full 218-subset enumeration is used only for scoring plays. Each candidate is evaluated by Monte Carlo rollouts over the **known remaining deck** (`state.deck`), sampled without replacement with a seeded PRNG (seed = snapshot hash, so identical states give identical advice).
+   - After `play(S)`: chips += score(S), handsLeft −= 1, refill the hand to hand size (exactly 3 cards under The Serpent), capped by deck size.
+   - After `discard(D)`: discardsLeft −= 1, refill the hand the same way.
    - Rollout policy until the round ends (chips ≥ target, or handsLeft = 0): if the best legal play clears the remainder, play it; else if discards remain, discard the cards not in the best play (lowest ranks first, max 5); else play the best legal play. Boss rules (Eye, Mouth, Arm) are updated along the rollout.
    - Each candidate yields `pClear` (fraction of rollouts that reached the target) and `expChips` (mean total chips at round end).
 5. Rank candidates by `pClear` descending, then `expChips` descending, then prefer `play` on exact ties. The top candidate is the recommendation; the next 6 are `alternatives`.

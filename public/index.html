@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Balatro Advisor</title>
+<style>
+  :root { --bg:#12141a; --panel:#1b1e27; --line:#2b3040; --text:#e9ecf2; --muted:#8f97ad; --red:#ff6b7a; --blue:#5ec8ff; --green:#5ee39a; --amber:#ffc65c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 system-ui, Segoe UI, Roboto, sans-serif; padding:16px; }
+  header { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:baseline; padding:12px 16px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+  header .big { font-size:1.6rem; font-weight:700; }
+  header .ok { color:var(--green); }
+  .muted { color:var(--muted); }
+  section { margin-top:16px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  h2 { margin:0 0 10px; font-size:0.85rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  #rec { border-color:var(--blue); }
+  #rec.discard { border-color:var(--amber); }
+  #rec.win { border-color:var(--green); }
+  #rec .action { font-size:2.2rem; font-weight:800; letter-spacing:.02em; }
+  #rec.play .action { color:var(--blue); } #rec.discard .action { color:var(--amber); } #rec.win .action { color:var(--green); }
+  .cards { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .card { display:inline-flex; align-items:center; justify-content:center; min-width:52px; height:68px; padding:0 8px; border-radius:8px; background:#f4f1ea; color:#1a1a1a; font-size:1.5rem; font-weight:700; box-shadow:0 2px 0 #b9b2a3; }
+  .card.red { color:#c8323e; }
+  .card.debuffed { opacity:.45; text-decoration:line-through; }
+  .card.small { min-width:40px; height:48px; font-size:1.1rem; }
+  .card.hint { outline:3px solid var(--blue); }
+  .reason { font-size:1.15rem; margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:0.95rem; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:600; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .grid { display:grid; grid-template-columns:auto repeat(13, 1fr); gap:3px; font-variant-numeric:tabular-nums; }
+  .grid div { text-align:center; padding:4px 0; border-radius:4px; background:#232838; }
+  .grid .h { background:transparent; color:var(--muted); font-size:.8rem; }
+  .grid .zero { opacity:.25; }
+  .grid .red { color:var(--red); }
+  .warn { color:var(--amber); }
+  .err { background:#3a1f25; color:#ffb4bb; padding:8px 12px; border-radius:8px; margin-top:12px; }
+  .idle { font-size:1.4rem; padding:24px; text-align:center; color:var(--muted); }
+  .dim { opacity:.4; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:#232838; color:var(--muted); font-size:.8rem; margin-right:6px; }
+  footer { margin-top:16px; color:var(--muted); font-size:.8rem; }
+</style>
+</head>
+<body>
+<header id="status"><span class="big">Balatro Advisor</span><span class="muted">connecting…</span></header>
+<div id="error" class="err" hidden></div>
+<section id="rec"><div class="idle">Waiting for Balatro…</div></section>
+<section id="alts" hidden><h2>Alternatives</h2><div id="altsBody"></div></section>
+<section id="plays" hidden><h2>Best scoring plays</h2><div id="playsBody"></div></section>
+<section id="deck" hidden><h2>Remaining deck</h2><div id="deckBody"></div></section>
+<section id="notes" hidden><h2>Warnings &amp; jokers</h2><div id="notesBody"></div></section>
+<footer id="foot"></footer>
+<script>
+const RANKS = [14,13,12,11,10,9,8,7,6,5,4,3,2];
+const RANK_LABEL = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
+const SUITS = [['Spades','♠'],['Hearts','♥'],['Clubs','♣'],['Diamonds','♦']];
+const RED = new Set(['Hearts','Diamonds']);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = (x) => Math.round(x * 100) + '%';
+const num = (x) => Math.round(x).toLocaleString();
+const PHASE_TEXT = { waiting:'Waiting for Balatro save…', shop:'In the shop', blind_select:'Choosing a blind', round_eval:'Round over', game_over:'Game over', other:'Waiting for the next hand…' };
+
+function cardHtml(c, cls = '') {
+  const classes = ['card', RED.has(c.suit) ? 'red' : '', c.debuffed ? 'debuffed' : '', cls].filter(Boolean).join(' ');
+  return `<span class="${classes}" title="${c.chips} chips">${esc(c.label)}</span>`;
+}
+const cardsHtml = (cs, cls = '') => `<div class="cards">${cs.map((c) => cardHtml(c, cls)).join('')}</div>`;
+const inline = (cs) => cs.map((c) => `<span class="${RED.has(c.suit) ? 'red' : ''}">${esc(c.label)}</span>`).join(' ');
+
+function render(p) {
+  const st = $('status');
+  if (p.phase === 'waiting') {
+    st.innerHTML = `<span class="big">Balatro Advisor</span><span class="muted">${esc(PHASE_TEXT.waiting)}</span>`;
+  } else {
+    const cleared = p.chipsScored >= p.blind.target && p.blind.target > 0;
+    st.innerHTML = `
+      <span class="big">Ante ${p.ante} · Round ${p.round}</span>
+      <span>${esc(p.blind.name || p.blindOnDeck || '')}</span>
+      <span class="big ${cleared ? 'ok' : ''}">${num(p.chipsScored)} / ${num(p.blind.target)}</span>
+      <span><span class="tag">Hands ${p.handsLeft}</span><span class="tag">Discards ${p.discardsLeft}</span><span class="tag">Deck ${p.deckCount}</span></span>`;
+  }
+  $('error').hidden = !p.error;
+  $('error').textContent = p.error ? `Save could not be read: ${p.error}` : '';
+
+  const rec = $('rec');
+  const a = p.advice;
+  if (p.phase !== 'selecting' || !a) {
+    rec.className = '';
+    rec.innerHTML = `<div class="idle">${esc(PHASE_TEXT[p.phase] || PHASE_TEXT.other)}</div>` + (p.hand && p.hand.length ? `<div class="dim">${cardsHtml(p.hand, 'small')}</div>` : '');
+  } else if (a.action === 'none') {
+    rec.className = '';
+    rec.innerHTML = `<div class="idle">${esc(a.reason)}</div>${cardsHtml(p.hand, 'small')}`;
+  } else {
+    const pick = new Set(a.cards.map((c) => c.id));
+    rec.className = a.clearsBlind ? 'win' : a.action;
+    const headline = a.action === 'play'
+      ? `PLAY ${esc(a.handType)} · ${num(a.score)}`
+      : `DISCARD ${a.cards.length}`;
+    const sub = a.clearsBlind
+      ? `Clears the blind (${num(a.remaining)} needed).`
+      : a.action === 'play'
+        ? `Leaves ${num(Math.max(0, a.remaining - a.score))} to go · ${pct(a.pClear)} to clear this round`
+        : `${pct(a.pClear)} to clear this round · expected ${num(a.expChips)} chips`;
+    rec.innerHTML = `<div class="action">${headline}</div><div>${sub}</div>${cardsHtml(a.cards)}<div class="reason">${esc(a.reason)}</div>
+      <div class="muted" style="margin-top:8px">Your hand</div>${cardsHtml(p.hand, 'small')}`;
+    rec.querySelectorAll('.card.small').forEach((el, i) => { if (pick.has(p.hand[i].id)) el.classList.add('hint'); });
+  }
+
+  const alts = $('alts');
+  if (a && a.alternatives && a.alternatives.length) {
+    alts.hidden = false;
+    $('altsBody').innerHTML = `<table><tr><th>Action</th><th>Cards</th><th>Hand</th><th class="num">Score</th><th class="num">Clear</th><th class="num">Exp. chips</th></tr>` +
+      a.alternatives.map((o) => `<tr><td>${o.action === 'play' ? 'Play' : 'Discard'}</td><td>${inline(o.cards)}</td><td>${esc(o.handType || '')}</td><td class="num">${o.score != null ? num(o.score) : ''}</td><td class="num">${pct(o.pClear)}</td><td class="num">${num(o.expChips)}</td></tr>`).join('') + '</table>';
+  } else alts.hidden = true;
+
+  const plays = $('plays');
+  if (a && a.topPlays && a.topPlays.length) {
+    plays.hidden = false;
+    $('playsBody').innerHTML = `<table><tr><th>Hand</th><th>Cards</th><th class="num">Score</th></tr>` +
+      a.topPlays.map((o) => `<tr><td>${esc(o.handType)}</td><td>${inline(o.cards)}</td><td class="num">${num(o.score)}</td></tr>`).join('') + '</table>';
+  } else plays.hidden = true;
+
+  const deck = $('deck');
+  if (p.deckCounts && p.phase !== 'waiting') {
+    deck.hidden = false;
+    let html = '<div class="grid"><div class="h"></div>' + RANKS.map((r) => `<div class="h">${RANK_LABEL[r]}</div>`).join('');
+    for (const [suit, sym] of SUITS) {
+      const red = RED.has(suit) ? 'red' : '';
+      let total = 0;
+      let row = '';
+      for (const r of RANKS) { const n = p.deckCounts[`${suit}:${r}`] || 0; total += n; row += `<div class="${n ? red : 'zero'}">${n}</div>`; }
+      html += `<div class="h ${red}">${sym} ${total}</div>` + row;
+    }
+    $('deckBody').innerHTML = html + '</div>';
+  } else deck.hidden = true;
+
+  const notes = [];
+  for (const w of p.warnings || []) notes.push(`<div class="warn">⚠ ${esc(w)}</div>`);
+  if (p.jokers && p.jokers.length) notes.push(`<div class="muted">Jokers (not scored): ${p.jokers.map((j) => esc(j.name || j.key)).join(', ')}</div>`);
+  $('notes').hidden = notes.length === 0;
+  $('notesBody').innerHTML = notes.join('');
+
+  $('foot').textContent = (a && a.samples ? `${a.samples} samples per option · ${Math.round(a.elapsedMs)} ms · ` : '') + `updated ${new Date(p.updatedAt).toLocaleTimeString()}`;
+}
+
+function connect() {
+  const es = new EventSource('/events');
+  es.addEventListener('state', (e) => render(JSON.parse(e.data)));
+  es.onerror = () => { es.close(); $('status').innerHTML = '<span class="big">Balatro Advisor</span><span class="muted">reconnecting…</span>'; setTimeout(connect, 1500); };
+}
+connect();
+</script>
+</body>
+</html>

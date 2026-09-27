@@ -1,0 +1,12 @@
+{
+  "name": "balatro-advisor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Watches Balatro's autosave and recommends what to play or discard.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node --test \"test/*.test.js\""
+  }
+}
