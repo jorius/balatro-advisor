@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Watches Balatro's autosave and recommends what to play or discard.",
+  "license": "MIT",
   "engines": {
     "node": ">=20"
   },
