@@ -17,3 +17,8 @@ To refresh the joker name table after a game update: `node scripts/gen-joker-nam
 ## About the delay
 
 Balatro queues a save after every play or discard but only writes it when its 5-second save timer has elapsed, at round end, or on pause. The advisor reacts within about 80 ms of the file landing, so any remaining lag is that timer. If you want it gone, the optional patch in `mods/BalatroAdvisor/lovely/save-timer.toml` makes the game flush saves immediately; it needs the Lovely injector, see the comments in that file.
+
+## Credits
+
+- [Balatrolator](https://github.com/kleinfreund/balatrolator) by Philipp Rudloff (kleinfreund), MIT: the scoring engine that turns a hand, its jokers, enhancements, editions, seals and Planet levels into the exact chips and mult Balatro would award. It is vendored unchanged under `vendor/balatrolator` with its license file; this project only feeds it the state read from the save and ranks the results.
+- [Balatro](https://www.playbalatro.com/) by LocalThunk: the game itself. This advisor reads its autosave and never modifies it.
